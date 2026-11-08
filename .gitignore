@@ -10,6 +10,7 @@ __pycache__/
 data/database/*.db
 data/database/*.sqlite3
 data/cache/
+data/voiceprints/*.json
 *.log
 
 # OS & Editor

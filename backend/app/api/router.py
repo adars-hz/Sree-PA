@@ -13,6 +13,7 @@ from .reminders import router as reminders_router
 from .automation import router as automation_router
 from .search import router as search_router
 from .data import router as data_router
+from .voice import router as voice_router
 
 api_router = APIRouter()
 
@@ -24,3 +25,4 @@ api_router.include_router(reminders_router)
 api_router.include_router(automation_router)
 api_router.include_router(search_router)
 api_router.include_router(data_router)
+api_router.include_router(voice_router)

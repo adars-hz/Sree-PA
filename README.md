@@ -68,10 +68,20 @@ SREE includes a native Windows 24/7 background listener that runs automatically 
 - **Desktop HUD Summon**: Say *"Open SREE"* or *"Show dashboard"* anytime to pop up the desktop app window.
 
 ### Control Scripts
+- [Enroll_My_Voice.bat](file:///d:/sri/Enroll_My_Voice.bat): Calibrate and train your unique voiceprint so SREE responds strictly to YOU.
 - [Enable_Auto_Startup.bat](file:///d:/sri/Enable_Auto_Startup.bat): Enable SREE to start on Windows power-on.
 - [Disable_Auto_Startup.bat](file:///d:/sri/Disable_Auto_Startup.bat): Disable automatic boot launch.
 - [Start_Background_Listener.bat](file:///d:/sri/Start_Background_Listener.bat): Start background listening immediately.
 - [Stop_Background_Listener.bat](file:///d:/sri/Stop_Background_Listener.bat): Stop the background listener.
+
+---
+
+## Speaker Voice Verification & Biometrics (Voice Match)
+
+SREE includes an acoustic voiceprint verification engine that measures fundamental frequency ($F_0$ pitch), formant resonance, and spectral timbre:
+- **Strict Owner Verification**: SREE will **only wake up and reply to YOUR voice**.
+- **Rejection of Strangers & TV Audio**: Voices of other people, family members, or background TV will be rejected with zero speech or interruption.
+- **Easy Calibration**: Run `Enroll_My_Voice.bat` once to register 3 sample utterances of your voice.
 
 ---
 
@@ -145,3 +155,6 @@ Verifies live interaction with the active running server and Ollama:
 ```bash
 python tests/test_master.py
 ```
+
+
+

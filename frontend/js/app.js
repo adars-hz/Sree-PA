@@ -520,7 +520,7 @@ class SreeApp {
             this.recognition = new SpeechRecognition();
             this.recognition.continuous = true;
             this.recognition.interimResults = true;
-            this.recognition.lang = 'en-US';
+            this.recognition.lang = navigator.language || 'en-US';
 
             this.recognition.onstart = () => {
                 this.isRecording = true;
@@ -583,23 +583,31 @@ class SreeApp {
                     return;
                 }
 
-                // 3. Instant Wake-Word detection ("hi sree", "hey sree", "sree", "hey sri", "hey siri", "siri")
-                const isWakeOnly = /^(?:hi|hey|hello)?\s*(?:sree|sri|siri)$/i.test(lower);
+                // 3. Instant Wake-Word detection ("hi sree", "hey sree", "sree", "hey sri", "hey shree", "siri", etc.)
+                const isWakeOnly = /^(?:hi|hey|hello|ok|okay)?\s*(?:sree|sri|shree|shri|siri|three|tree|see)$/i.test(lower);
                 if (isWakeOnly) {
                     clearTimeout(this.speechDebounceTimer);
                     this.speechDebounceTimer = null;
                     const now = Date.now();
-                    if ((now - this.lastCommittedTime) < 2500) return; // Prevent double wake
+                    if ((now - this.lastCommittedTime) < 2000) return; // Prevent double wake
                     this.lastCommittedTime = now;
                     this.playChime('siri_start');
                     this.triggerHaptic([30, 40]);
                     this.setOrbState('listening');
-                    this.speak("I'm listening.");
+
+                    // Fast visual feedback without talking over the user!
+                    if (this.voiceStatusText) {
+                        this.voiceStatusText.textContent = "🟢 SREE: I'm listening... Speak your command!";
+                    }
+                    if (subtitleCard && subtitleText) {
+                        subtitleCard.style.display = 'inline-flex';
+                        subtitleText.textContent = "⚡ SREE: I'm listening... What can I do for you?";
+                    }
                     return;
                 }
 
                 // 4. Strip prepended wake word if user said "hey sree open calculator" -> "open calculator"
-                let cleanedCommand = currentText.replace(/^(?:hi|hey|hello)\s*(?:sree|sri|siri)[,\s]*/i, "").trim();
+                let cleanedCommand = currentText.replace(/^(?:hi|hey|hello|ok|okay)\s*(?:sree|sri|shree|shri|siri|three|tree|see)[,\s]*/i, "").trim();
                 if (!cleanedCommand) cleanedCommand = currentText;
 
                 // 5. Siri-Speed Silence Debounce (550ms):
@@ -1391,6 +1399,67 @@ class SreeApp {
                 }
             });
         }
+
+        // Voice Verification Biometrics Handlers
+        const voiceVerificationToggle = document.getElementById('voiceVerificationToggle');
+        const voiceEnrollStatusDesc = document.getElementById('voiceEnrollStatusDesc');
+        const voiceSpeakerBadge = document.getElementById('voiceSpeakerBadge');
+        const startVoiceEnrollWizardBtn = document.getElementById('startVoiceEnrollWizardBtn');
+        const clearVoiceProfileBtn = document.getElementById('clearVoiceProfileBtn');
+
+        const loadVoiceStatus = async () => {
+            try {
+                const res = await fetch(`${this.apiBase}/api/voice/status`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (voiceVerificationToggle) voiceVerificationToggle.checked = !!data.enabled;
+                    if (voiceEnrollStatusDesc) {
+                        voiceEnrollStatusDesc.textContent = data.is_enrolled
+                            ? `Status: Enrolled (${data.samples_count} voiceprints) - Accuracy Threshold: ${Math.round(data.similarity_threshold * 100)}%`
+                            : "Status: Not enrolled. Run 'Enroll_My_Voice.bat' to calibrate your voice.";
+                    }
+                    if (voiceSpeakerBadge) {
+                        voiceSpeakerBadge.textContent = data.is_enrolled ? `Owner: ${data.speaker_name}` : "Owner: Not Enrolled";
+                        voiceSpeakerBadge.className = data.is_enrolled ? "pill pill-cyan" : "pill pill-red";
+                    }
+                }
+            } catch (err) {}
+        };
+
+        if (voiceVerificationToggle) {
+            voiceVerificationToggle.addEventListener('change', async (e) => {
+                this.triggerHaptic([20]);
+                try {
+                    await fetch(`${this.apiBase}/api/voice/toggle`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ enabled: e.target.checked })
+                    });
+                    loadVoiceStatus();
+                } catch (err) {}
+            });
+        }
+
+        if (startVoiceEnrollWizardBtn) {
+            startVoiceEnrollWizardBtn.addEventListener('click', () => {
+                this.triggerHaptic([25]);
+                alert("Voice Enrollment Wizard:\n\nDouble-click 'Enroll_My_Voice.bat' in your SREE folder (D:\\sri) to calibrate your voice so SREE responds strictly to you!");
+            });
+        }
+
+        if (clearVoiceProfileBtn) {
+            clearVoiceProfileBtn.addEventListener('click', async () => {
+                this.triggerHaptic([30]);
+                if (confirm("Reset your enrolled voiceprint? SREE will no longer verify speaker voice until re-enrolled.")) {
+                    try {
+                        await fetch(`${this.apiBase}/api/voice/clear`, { method: 'POST' });
+                        loadVoiceStatus();
+                    } catch (err) {}
+                }
+            });
+        }
+
+        loadVoiceStatus();
 
         const copyUrlBtn = document.getElementById('copyUrlBtn');
         if (copyUrlBtn) {

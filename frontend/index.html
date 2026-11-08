@@ -449,6 +449,37 @@
 
                         <hr class="divider">
 
+                        <!-- SPEAKER VOICE MATCH & BIOMETRICS -->
+                        <div class="settings-group">
+                            <h4 class="section-subtitle">Speaker Voice Verification & Biometrics</h4>
+                            <p class="setting-help">Ensures SREE strictly responds ONLY to your verified vocal acoustics, ignoring strangers, family members, or TV noise.</p>
+                            
+                            <div class="voice-security-box" style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(0, 242, 254, 0.25); border-radius: 12px; padding: 16px; margin-top: 10px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                    <div>
+                                        <strong style="color: #f1f5f9; display: block; font-size: 1rem;">Require Voice Match to Wake SREE</strong>
+                                        <span style="font-size: 0.82rem; color: #94a3b8;" id="voiceEnrollStatusDesc">Status: Checking profile...</span>
+                                    </div>
+                                    <label class="switch">
+                                        <input type="checkbox" id="voiceVerificationToggle">
+                                        <span class="slider round"></span>
+                                    </label>
+                                </div>
+
+                                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                                    <button class="btn btn-sm btn-primary" id="startVoiceEnrollWizardBtn" title="Calibrate and train your unique voiceprint">
+                                        🎙️ Train / Enroll My Voice
+                                    </button>
+                                    <button class="btn btn-sm btn-outline" id="clearVoiceProfileBtn" title="Reset voiceprint">
+                                        Reset Voiceprint
+                                    </button>
+                                    <span class="pill pill-cyan" id="voiceSpeakerBadge" style="margin-left: auto;">Owner: Not Enrolled</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr class="divider">
+
                         <div class="settings-group">
                             <h4 class="section-subtitle">Data Privacy & Sovereignty</h4>
                             <p class="setting-help">You have complete ownership of all local data. You can export or erase records at any time.</p>

@@ -31,11 +31,11 @@ class SkillCrystallizer:
         """
         clean = message.lower().strip()
         
-        # Strip wake prefixes
-        clean = re.sub(r"^(?:hey|hi|hello)\s+(?:sree|sri|siri)[,\s]*", "", clean).strip()
+        # Strip wake prefixes (handling all phonetic variants)
+        clean = re.sub(r"^(?:hey|hi|hello|ok|okay)?\s*(?:sree|sri|shree|shri|siri|three)[,\s]*", "", clean).strip()
 
         # 1. Greetings & Wake-Words
-        if not clean or clean in ("hi", "hey", "hello", "good morning", "good afternoon", "good evening", "sree", "sri", "siri"):
+        if not clean or clean in ("hi", "hey", "hello", "good morning", "good afternoon", "good evening", "sree", "sri", "shree", "shri", "siri", "three"):
             hour = datetime.now().hour
             period = "morning" if hour < 12 else ("afternoon" if hour < 17 else "evening")
             return f"Hey Boss! SREE is listening. What can I do for you this {period}?"
