@@ -15,11 +15,13 @@ import numpy as np
 import scipy.io.wavfile
 import scipy.signal
 
+from ..core.config import settings
+
 logger = logging.getLogger("sree.voice_biometrics")
 
 class VoiceBiometricsEngine:
     def __init__(self, data_dir: Optional[Path] = None):
-        self.data_dir = data_dir or Path(__file__).resolve().parent.parent.parent.parent / "data" / "voiceprints"
+        self.data_dir = data_dir or (settings.DATA_DIR / "voiceprints")
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.profile_path = self.data_dir / "owner_profile.json"
         

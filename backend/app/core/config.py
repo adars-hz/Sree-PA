@@ -1,11 +1,22 @@
+import sys
 import os
 from pathlib import Path
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
-# Load .env file from project root
-ROOT_DIR = Path(__file__).resolve().parent.parent.parent.parent
-load_dotenv(ROOT_DIR / ".env")
+# Frozen (PyInstaller .exe) vs Development Path Resolution
+if getattr(sys, "frozen", False):
+    BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+    PERSISTENT_DIR = Path(os.environ.get("APPDATA", str(Path.home()))) / "SREE"
+    ROOT_DIR = BUNDLE_DIR
+else:
+    BUNDLE_DIR = Path(__file__).resolve().parent.parent.parent.parent
+    PERSISTENT_DIR = BUNDLE_DIR
+    ROOT_DIR = BUNDLE_DIR
+
+PERSISTENT_DIR.mkdir(parents=True, exist_ok=True)
+env_file = PERSISTENT_DIR / ".env" if (PERSISTENT_DIR / ".env").exists() else ROOT_DIR / ".env"
+load_dotenv(env_file)
 
 class Settings(BaseModel):
     APP_NAME: str = os.getenv("APP_NAME", "SREE")
@@ -43,10 +54,10 @@ class Settings(BaseModel):
     ALLOW_LAN_ACCESS: bool = os.getenv("ALLOW_LAN_ACCESS", "true").lower() == "true"
     
     # Paths
-    BASE_DIR: Path = ROOT_DIR
-    DATA_DIR: Path = ROOT_DIR / "data"
-    DB_PATH: Path = ROOT_DIR / os.getenv("DATABASE_PATH", "data/database/sree.db")
-    FRONTEND_DIR: Path = ROOT_DIR / "frontend"
+    BASE_DIR: Path = BUNDLE_DIR
+    DATA_DIR: Path = PERSISTENT_DIR / "data"
+    DB_PATH: Path = PERSISTENT_DIR / "data" / "database" / "sree.db"
+    FRONTEND_DIR: Path = BUNDLE_DIR / "frontend"
 
     def update_runtime_setting(self, key: str, value: str):
         """
@@ -54,13 +65,13 @@ class Settings(BaseModel):
         Updates in-memory settings and persists the changed key/value to runtime .env.
         """
         setattr(self, key, value)
-        env_file = ROOT_DIR / ".env"
-        if not env_file.exists():
-            with open(env_file, "w", encoding="utf-8") as f:
+        target_env = PERSISTENT_DIR / ".env"
+        if not target_env.exists():
+            with open(target_env, "w", encoding="utf-8") as f:
                 f.write(f"{key}={value}\n")
             return
             
-        with open(env_file, "r", encoding="utf-8") as f:
+        with open(target_env, "r", encoding="utf-8") as f:
             lines = f.readlines()
             
         found = False
@@ -75,7 +86,7 @@ class Settings(BaseModel):
         if not found:
             new_lines.append(f"{key}={value}\n")
             
-        with open(env_file, "w", encoding="utf-8") as f:
+        with open(target_env, "w", encoding="utf-8") as f:
             f.writelines(new_lines)
 
 settings = Settings()

@@ -18,4 +18,6 @@ data/voiceprints/*
 Thumbs.db
 .vscode/
 .idea/
+build/
+dist/
 
