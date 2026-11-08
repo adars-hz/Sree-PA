@@ -42,6 +42,7 @@ class SreeApp {
         this.initAutomationHandlers();
         this.initSettingsHandlers();
         this.initQrModal();
+        this.initScreenHandlers();
         this.initTelemetryPoller();
         this.loadAIProviders();
         this.updateDynamicGreeting();
@@ -297,6 +298,8 @@ class SreeApp {
             this.loadReminders();
         } else if (tabName === 'devices') {
             this.loadDeviceTelemetry();
+        } else if (tabName === 'screen') {
+            this.loadScreenStatus();
         } else if (tabName === 'settings') {
             this.loadOllamaChips();
             this.loadAIProviders();
@@ -1564,6 +1567,321 @@ class SreeApp {
             this.activeProvider = data.active_provider;
             this.activeModel = data.active_model;
             this.loadAIProviders();
+        } catch (e) {}
+    }
+
+    // ==========================================
+    // DESKTOP SCREEN SHARE & REMOTE COMPUTER ACCESS
+    // ==========================================
+    initScreenHandlers() {
+        this.screenDimensions = { width: 1920, height: 1080 };
+        this.isStreamingMjpeg = false;
+        this.screenBroadcastStream = null;
+        this.screenBroadcastInterval = null;
+
+        const broadcastBtn = document.getElementById('startScreenBroadcastBtn');
+        const refreshBtn = document.getElementById('refreshScreenSnapshotBtn');
+        const screenshotBtn = document.getElementById('takeScreenshotDiskBtn');
+        const liveStreamBtn = document.getElementById('toggleLiveStreamModeBtn');
+        const feedImg = document.getElementById('desktopScreenFeed');
+        const feedback = document.getElementById('screenActionFeedback');
+        const broadcastBadge = document.getElementById('screenBroadcastBadge');
+        const cursorPos = document.getElementById('streamCursorPos');
+        const remoteTextInput = document.getElementById('remoteTextInput');
+        const sendRemoteTextBtn = document.getElementById('sendRemoteTextBtn');
+
+        const showFeedback = (msg, isError = false) => {
+            if (!feedback) return;
+            feedback.textContent = msg;
+            feedback.style.color = isError ? 'var(--danger-red)' : 'var(--cyan-primary)';
+            setTimeout(() => {
+                if (feedback.textContent === msg) feedback.textContent = '';
+            }, 3500);
+        };
+
+        // 1. Host Screen Capture & Broadcasting (Native Web Media Stream)
+        if (broadcastBtn) {
+            broadcastBtn.addEventListener('click', async () => {
+                this.triggerHaptic([25]);
+                if (this.screenBroadcastStream) {
+                    // Stop active broadcast
+                    this.stopScreenBroadcast();
+                    broadcastBtn.textContent = '📡 Broadcast Desktop Screen';
+                    broadcastBtn.classList.remove('btn-danger');
+                    broadcastBtn.classList.add('btn-primary');
+                    if (broadcastBadge) {
+                        broadcastBadge.textContent = 'Stream Ready';
+                        broadcastBadge.className = 'pill pill-green';
+                    }
+                    showFeedback('Desktop broadcast stopped.');
+                    return;
+                }
+
+                try {
+                    const stream = await navigator.mediaDevices.getDisplayMedia({
+                        video: { cursor: 'always', displaySurface: 'monitor' },
+                        audio: false
+                    });
+
+                    this.screenBroadcastStream = stream;
+                    broadcastBtn.textContent = '⏹️ Stop Broadcasting';
+                    broadcastBtn.classList.remove('btn-primary');
+                    broadcastBtn.classList.add('btn-danger');
+                    if (broadcastBadge) {
+                        broadcastBadge.textContent = 'Broadcasting (Live)';
+                        broadcastBadge.className = 'pill pill-cyan';
+                    }
+                    showFeedback('Desktop screen broadcasting live!');
+
+                    // Setup offscreen canvas and video element
+                    const hiddenVideo = document.createElement('video');
+                    hiddenVideo.srcObject = stream;
+                    hiddenVideo.play();
+
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+
+                    this.screenBroadcastInterval = setInterval(async () => {
+                        if (!this.screenBroadcastStream || hiddenVideo.readyState < 2) return;
+                        canvas.width = hiddenVideo.videoWidth || 1280;
+                        canvas.height = hiddenVideo.videoHeight || 720;
+                        ctx.drawImage(hiddenVideo, 0, 0, canvas.width, canvas.height);
+
+                        const b64 = canvas.toDataURL('image/jpeg', 0.65);
+                        try {
+                            await fetch(`${this.apiBase}/api/desktop/frame`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ frame_base64: b64 })
+                            });
+                        } catch (e) {}
+                    }, 100);
+
+                    // When user clicks the browser's native "Stop Sharing" floating button
+                    stream.getVideoTracks()[0].onended = () => {
+                        this.stopScreenBroadcast();
+                        broadcastBtn.textContent = '📡 Broadcast Desktop Screen';
+                        broadcastBtn.classList.remove('btn-danger');
+                        broadcastBtn.classList.add('btn-primary');
+                        if (broadcastBadge) {
+                            broadcastBadge.textContent = 'Stream Ready';
+                            broadcastBadge.className = 'pill pill-green';
+                        }
+                    };
+                } catch (err) {
+                    showFeedback(`Broadcast failed: ${err.message}`, true);
+                }
+            });
+        }
+
+        // 2. Refresh Snapshot Button
+        if (refreshBtn && feedImg) {
+            refreshBtn.addEventListener('click', () => {
+                this.triggerHaptic([15]);
+                feedImg.src = `${this.apiBase}/api/desktop/snapshot?t=${Date.now()}`;
+                showFeedback('Snapshot updated.');
+            });
+        }
+
+        // 3. Toggle Live Stream Mode Button (MJPEG 15-20 FPS)
+        if (liveStreamBtn && feedImg) {
+            liveStreamBtn.addEventListener('click', () => {
+                this.triggerHaptic([20]);
+                this.isStreamingMjpeg = !this.isStreamingMjpeg;
+                if (this.isStreamingMjpeg) {
+                    feedImg.src = `${this.apiBase}/api/desktop/stream?t=${Date.now()}`;
+                    liveStreamBtn.textContent = '⏸️ Pause Stream';
+                    liveStreamBtn.classList.add('btn-primary');
+                    liveStreamBtn.classList.remove('btn-outline');
+                    showFeedback('Live MJPEG stream active.');
+                } else {
+                    feedImg.src = `${this.apiBase}/api/desktop/snapshot?t=${Date.now()}`;
+                    liveStreamBtn.textContent = '▶️ Live Stream (MJPEG)';
+                    liveStreamBtn.classList.remove('btn-primary');
+                    liveStreamBtn.classList.add('btn-outline');
+                    showFeedback('Stream paused on snapshot.');
+                }
+            });
+        }
+
+        // 4. Save Screenshot to Disk
+        if (screenshotBtn) {
+            screenshotBtn.addEventListener('click', async () => {
+                this.triggerHaptic([20]);
+                try {
+                    const res = await fetch(`${this.apiBase}/api/desktop/screenshot/save`, { method: 'POST' });
+                    const data = await res.json();
+                    if (data.success) {
+                        showFeedback(`Screenshot saved to ${data.filename}!`);
+                    } else {
+                        showFeedback(`Save failed: ${data.error || 'Unknown error'}`, true);
+                    }
+                } catch (e) {
+                    showFeedback('Failed to save screenshot.', true);
+                }
+            });
+        }
+
+        // 5. Interactive Mouse & Touch Control on Stream Image
+        if (feedImg) {
+            const calculateCoords = (e) => {
+                const rect = feedImg.getBoundingClientRect();
+                const relX = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                const relY = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+                const hostX = Math.round(relX * this.screenDimensions.width);
+                const hostY = Math.round(relY * this.screenDimensions.height);
+                return { hostX, hostY };
+            };
+
+            feedImg.addEventListener('mousemove', (e) => {
+                const { hostX, hostY } = calculateCoords(e);
+                if (cursorPos) cursorPos.textContent = `X: ${hostX}, Y: ${hostY}`;
+            });
+
+            feedImg.addEventListener('click', async (e) => {
+                this.triggerHaptic([15]);
+                const { hostX, hostY } = calculateCoords(e);
+                try {
+                    await fetch(`${this.apiBase}/api/desktop/mouse`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'click', x: hostX, y: hostY, button: 'left' })
+                    });
+                    showFeedback(`Clicked at (${hostX}, ${hostY})`);
+                } catch (e) {}
+            });
+
+            feedImg.addEventListener('contextmenu', async (e) => {
+                e.preventDefault();
+                this.triggerHaptic([20]);
+                const { hostX, hostY } = calculateCoords(e);
+                try {
+                    await fetch(`${this.apiBase}/api/desktop/mouse`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'right_click', x: hostX, y: hostY })
+                    });
+                    showFeedback(`Right-clicked at (${hostX}, ${hostY})`);
+                } catch (e) {}
+            });
+
+            feedImg.addEventListener('dblclick', async (e) => {
+                this.triggerHaptic([20]);
+                const { hostX, hostY } = calculateCoords(e);
+                try {
+                    await fetch(`${this.apiBase}/api/desktop/mouse`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'double_click', x: hostX, y: hostY })
+                    });
+                    showFeedback(`Double-clicked at (${hostX}, ${hostY})`);
+                } catch (e) {}
+            });
+        }
+
+        // 6. Remote Keyboard Controls
+        const sendRemoteText = async () => {
+            if (!remoteTextInput) return;
+            const text = remoteTextInput.value;
+            if (!text) return;
+            this.triggerHaptic([15]);
+            try {
+                const res = await fetch(`${this.apiBase}/api/desktop/keyboard`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'type', text: text })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showFeedback(`Sent text to PC: "${text}"`);
+                    remoteTextInput.value = '';
+                } else {
+                    showFeedback(`Typing error: ${data.error}`, true);
+                }
+            } catch (e) {
+                showFeedback('Failed to send text.', true);
+            }
+        };
+
+        if (sendRemoteTextBtn) {
+            sendRemoteTextBtn.addEventListener('click', sendRemoteText);
+        }
+        if (remoteTextInput) {
+            remoteTextInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    sendRemoteText();
+                }
+            });
+        }
+
+        document.querySelectorAll('.remote-key-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                this.triggerHaptic([15]);
+                const key = btn.getAttribute('data-key');
+                if (!key) return;
+                try {
+                    await fetch(`${this.apiBase}/api/desktop/keyboard`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'press', key: key })
+                    });
+                    showFeedback(`Pressed key: ${key}`);
+                } catch (e) {}
+            });
+        });
+
+        // 7. Desktop OS Quick Action Buttons
+        document.querySelectorAll('.os-action-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                this.triggerHaptic([20]);
+                const action = btn.getAttribute('data-action');
+                if (!action) return;
+                try {
+                    const res = await fetch(`${this.apiBase}/api/desktop/action`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: action })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        showFeedback(data.message || `Executed ${action}`);
+                    } else {
+                        showFeedback(`Action failed: ${data.error}`, true);
+                    }
+                } catch (e) {
+                    showFeedback('Failed to execute OS command.', true);
+                }
+            });
+        });
+    }
+
+    stopScreenBroadcast() {
+        if (this.screenBroadcastInterval) {
+            clearInterval(this.screenBroadcastInterval);
+            this.screenBroadcastInterval = null;
+        }
+        if (this.screenBroadcastStream) {
+            this.screenBroadcastStream.getTracks().forEach(t => t.stop());
+            this.screenBroadcastStream = null;
+        }
+    }
+
+    async loadScreenStatus() {
+        try {
+            const res = await fetch(`${this.apiBase}/api/desktop/status`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.screen) {
+                    this.screenDimensions = data.screen;
+                    const resBadge = document.getElementById('screenResolutionBadge');
+                    if (resBadge) resBadge.textContent = `${data.screen.width} x ${data.screen.height}`;
+                }
+                const cursorPos = document.getElementById('streamCursorPos');
+                if (cursorPos && data.cursor) {
+                    cursorPos.textContent = `X: ${data.cursor.x}, Y: ${data.cursor.y}`;
+                }
+            }
         } catch (e) {}
     }
 

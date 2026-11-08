@@ -7,10 +7,10 @@ __pycache__/
 *$py.class
 
 # Data & Models
-data/database/*.db
+data/database/*.db*
 data/database/*.sqlite3
 data/cache/
-data/voiceprints/*.json
+data/voiceprints/*
 *.log
 
 # OS & Editor

@@ -80,6 +80,10 @@
                     <span class="nav-icon">⚡</span>
                     <span class="nav-label">Device Control</span>
                 </button>
+                <button class="nav-item" data-tab="screen">
+                    <span class="nav-icon">🖥️</span>
+                    <span class="nav-label">Screen & Remote</span>
+                </button>
                 <button class="nav-item" data-tab="settings">
                     <span class="nav-icon">⚙️</span>
                     <span class="nav-label">Settings</span>
@@ -370,7 +374,95 @@
                     </div>
                 </section>
 
-                <!-- VIEW 8: SETTINGS -->
+                <!-- VIEW 8: SCREEN SHARE & DESKTOP ACCESS -->
+                <section class="view" id="view-screen">
+                    <div class="card glass-card">
+                        <div class="card-header-row" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                            <div>
+                                <h3 class="card-title">🖥️ Live Desktop Screen & Remote Access</h3>
+                                <p class="card-sub">Zero-latency screen streaming, interactive touch/mouse control, and remote keyboard execution.</p>
+                            </div>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <span class="pill pill-cyan" id="screenResolutionBadge">1920 x 1080</span>
+                                <span class="pill pill-green" id="screenBroadcastBadge">Stream Ready</span>
+                            </div>
+                        </div>
+
+                        <!-- Screen Toolbar -->
+                        <div class="screen-controls-bar" style="margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                            <button class="btn btn-primary" id="startScreenBroadcastBtn">
+                                📡 Broadcast Desktop Screen
+                            </button>
+                            <button class="btn btn-outline" id="refreshScreenSnapshotBtn">
+                                🔄 Refresh Snapshot
+                            </button>
+                            <button class="btn btn-outline" id="takeScreenshotDiskBtn">
+                                📸 Save Screenshot
+                            </button>
+                            <button class="btn btn-outline" id="toggleLiveStreamModeBtn">
+                                ▶️ Live Stream (MJPEG)
+                            </button>
+                            <span id="screenActionFeedback" style="font-size: 0.85rem; color: #00f2fe; margin-left: auto;"></span>
+                        </div>
+
+                        <!-- Live Screen Feed Display Container -->
+                        <div class="screen-viewer-container" id="screenViewerContainer" style="margin-top: 16px; position: relative; background: #000; border: 1px solid rgba(0, 242, 254, 0.3); border-radius: 12px; overflow: hidden; display: flex; justify-content: center; align-items: center; min-height: 380px;">
+                            <img id="desktopScreenFeed" src="/api/desktop/snapshot" alt="Live Desktop Screen" style="width: 100%; height: auto; max-height: 520px; object-fit: contain; display: block; cursor: crosshair;">
+                            <div class="screen-overlay-hud">
+                                <span id="streamFpsCounter">LIVE FEED</span> | <span id="streamCursorPos">X: --, Y: --</span>
+                            </div>
+                        </div>
+
+                        <!-- Remote Keyboard & Input Bar -->
+                        <h4 class="section-subtitle" style="margin-top: 20px;">⌨️ Remote Keystroke & Text Input</h4>
+                        <div class="remote-keyboard-row" style="margin-top: 8px;">
+                            <input type="text" class="form-input" id="remoteTextInput" placeholder="Type text to send to host PC...">
+                            <button class="btn btn-primary" id="sendRemoteTextBtn">Send Text</button>
+                            <button class="btn btn-outline remote-key-btn" data-key="enter">Enter ↵</button>
+                            <button class="btn btn-outline remote-key-btn" data-key="backspace">⌫ Del</button>
+                            <button class="btn btn-outline remote-key-btn" data-key="space">Space</button>
+                            <button class="btn btn-outline remote-key-btn" data-key="tab">Tab ⇥</button>
+                            <button class="btn btn-outline remote-key-btn" data-key="esc">Esc</button>
+                        </div>
+
+                        <!-- Quick Windows Desktop System Control Buttons -->
+                        <h4 class="section-subtitle" style="margin-top: 20px;">⚡ Quick Desktop Commands</h4>
+                        <div class="quick-actions-grid" style="margin-top: 10px;">
+                            <button class="btn btn-secondary os-action-btn" data-action="minimize_all" title="Win + D">
+                                🪟 Show Desktop
+                            </button>
+                            <button class="btn btn-secondary os-action-btn" data-action="switch_window" title="Alt + Tab">
+                                🔄 Switch Window
+                            </button>
+                            <button class="btn btn-secondary os-action-btn" data-action="task_manager" title="Ctrl + Shift + Esc">
+                                📊 Task Manager
+                            </button>
+                            <button class="btn btn-secondary os-action-btn" data-action="close_window" title="Alt + F4">
+                                ❌ Close Window
+                            </button>
+                            <button class="btn btn-secondary os-action-btn" data-action="volume_up">
+                                🔊 Volume Up
+                            </button>
+                            <button class="btn btn-secondary os-action-btn" data-action="volume_down">
+                                🔉 Volume Down
+                            </button>
+                            <button class="btn btn-secondary os-action-btn" data-action="mute">
+                                🔇 Mute Audio
+                            </button>
+                            <button class="btn btn-secondary os-action-btn" data-action="copy">
+                                📋 Copy (Ctrl+C)
+                            </button>
+                            <button class="btn btn-secondary os-action-btn" data-action="paste">
+                                📄 Paste (Ctrl+V)
+                            </button>
+                            <button class="btn btn-danger os-action-btn" data-action="lock_pc">
+                                🔒 Lock Workstation
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- VIEW 9: SETTINGS -->
                 <section class="view" id="view-settings">
                     <div class="card glass-card">
                         <h3 class="card-title">Assistant Settings & Security</h3>
@@ -517,6 +609,7 @@
         <button class="mob-nav-item active" data-tab="home">◈ Home</button>
         <button class="mob-nav-item" data-tab="chat">💬 Chat</button>
         <button class="mob-nav-item" data-tab="voice">🎙️ Voice</button>
+        <button class="mob-nav-item" data-tab="screen">🖥️ Screen</button>
         <button class="mob-nav-item" data-tab="notes">📝 Notes</button>
         <button class="mob-nav-item" data-tab="devices">⚡ Device</button>
         <button class="mob-nav-item" data-tab="settings">⚙️ Settings</button>

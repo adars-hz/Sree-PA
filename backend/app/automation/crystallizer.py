@@ -9,6 +9,8 @@ from datetime import datetime
 from typing import Optional, Dict, Any, Callable
 from .allowlist import ALLOWLISTED_APPLICATIONS
 from .executor import automation_executor
+from .desktop_control import desktop_control
+from .screen_share import screen_share
 from ..services.weather import weather_service
 from ..services.briefing import briefing_engine
 
@@ -69,6 +71,89 @@ class SkillCrystallizer:
             if result.get("success"):
                 return f"Opening {result.get('app', app_id)}."
             return f"Notice: {result.get('error')}"
+
+        # 3B. Screen Sharing & Screenshot Commands
+        if re.search(r"\b(?:take\s+a\s+screenshot|capture\s+(?:the\s+)?screen|screenshot)\b", clean):
+            res = screen_share.save_screenshot_to_disk()
+            if res.get("success"):
+                return f"Screenshot captured and saved to {res.get('filename')}."
+            return "Captured desktop screenshot."
+
+        if re.search(r"\b(?:share\s+(?:my\s+)?screen|open\s+screen\s+share|show\s+(?:my\s+)?screen)\b", clean):
+            return "Opening Live Desktop Screen Share feed."
+
+        # 3C. Desktop Navigation & Window Control Shortcuts
+        if re.search(r"\b(?:minimize\s+all(?:\s+windows)?|show\s+desktop|go\s+to\s+desktop)\b", clean):
+            desktop_control.execute_system_action("minimize_all")
+            return "Minimized all windows."
+
+        if re.search(r"\b(?:switch\s+window|next\s+window|alt\s+tab)\b", clean):
+            desktop_control.execute_system_action("switch_window")
+            return "Switched active window."
+
+        if re.search(r"\b(?:close\s+active\s+window|close\s+this\s+window|close\s+window)\b", clean):
+            desktop_control.execute_system_action("close_window")
+            return "Closed active window."
+
+        if re.search(r"\b(?:volume\s+up|increase\s+volume)\b", clean):
+            desktop_control.execute_system_action("volume_up")
+            return "Volume increased."
+
+        if re.search(r"\b(?:volume\s+down|decrease\s+volume|lower\s+volume)\b", clean):
+            desktop_control.execute_system_action("volume_down")
+            return "Volume decreased."
+
+        if re.search(r"\b(?:mute\s+audio|mute\s+sound|mute\s+volume|unmute)\b", clean):
+            desktop_control.execute_system_action("mute")
+            return "Muted audio."
+
+        if re.search(r"\b(?:scroll\s+down)\b", clean):
+            desktop_control.scroll(-6)
+            return "Scrolled down."
+
+        if re.search(r"\b(?:scroll\s+up)\b", clean):
+            desktop_control.scroll(6)
+            return "Scrolled up."
+
+        if re.search(r"\b(?:lock\s+my\s+pc|lock\s+(?:the\s+)?computer|lock\s+workstation|lock\s+screen)\b", clean):
+            desktop_control.execute_system_action("lock_pc")
+            return "Locked Windows workstation."
+
+        # Mouse and typing commands
+        if clean in ("click", "left click", "mouse click"):
+            desktop_control.click()
+            return "Clicked."
+
+        if clean in ("double click", "double-click"):
+            desktop_control.double_click()
+            return "Double clicked."
+
+        if clean in ("right click", "right-click", "context menu"):
+            desktop_control.right_click()
+            return "Right clicked."
+
+        if re.search(r"\b(?:copy(?:\s+this|\s+that|\s+selection)?)\b", clean):
+            desktop_control.execute_system_action("copy")
+            return "Copied to clipboard."
+
+        if re.search(r"\b(?:paste(?:\s+this|\s+that|\s+clipboard)?)\b", clean):
+            desktop_control.execute_system_action("paste")
+            return "Pasted from clipboard."
+
+        type_match = re.match(r"^(?:type|write|input)\s+[\"']?(.+?)[\"']?$", clean)
+        if type_match:
+            text_to_type = type_match.group(1).strip()
+            if text_to_type:
+                desktop_control.type_text(text_to_type)
+                return f"Typed: {text_to_type}"
+
+        press_match = re.match(r"^(?:press|hit|tap)\s+(enter|return|escape|esc|backspace|tab|space|spacebar|up|down|left|right)$", clean)
+        if press_match:
+            k = press_match.group(1)
+            key_map = {"return": "enter", "spacebar": "space"}
+            target_key = key_map.get(k, k)
+            desktop_control.press_key(target_key)
+            return f"Pressed {target_key}."
 
         # 4. What time is it / Current time
         if re.search(r"\b(?:what\s+time\s+is\s+it|what(?:'s|\s+is)\s+the\s+time|current\s+time)\b", clean):
