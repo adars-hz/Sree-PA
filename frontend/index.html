@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>SREE – Personal AI Assistant</title>
+    <meta name="theme-color" content="#030712">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="description" content="Your Personal AI. Your Digital World. Zero-cost, private, intelligent assistant.">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%23030712' stroke='%2300f2fe' stroke-width='6'/><circle cx='50' cy='50' r='20' fill='%2300c6ff'/></svg>">
+    <link rel="stylesheet" href="/css/style.css">
+    <!-- Google Fonts for futuristic cyberpunk aesthetic -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body class="theme-dark">
+    <!-- Background Ambient Glow & Grid -->
+    <div class="hud-grid-overlay"></div>
+    <div class="ambient-glow glow-cyan"></div>
+    <div class="ambient-glow glow-blue"></div>
+
+    <!-- PWA Install Banner (Android / Desktop Install prompt) -->
+    <div class="pwa-install-banner" id="pwaInstallBanner" style="display: none;">
+        <div class="install-banner-content">
+            <span class="install-banner-icon">📲</span>
+            <div class="install-banner-text">
+                <strong>Install SREE App</strong>
+                <span>Run fullscreen on your Android home screen</span>
+            </div>
+        </div>
+        <button class="btn btn-sm btn-primary" id="installPwaBtn">Install</button>
+        <button class="banner-close-btn" id="dismissPwaBtn">&times;</button>
+    </div>
+
+    <div class="app-layout">
+        <!-- Sidebar Navigation (Desktop) -->
+        <aside class="sidebar" id="sidebar">
+            <div class="brand">
+                <div class="brand-logo-hex">
+                    <div class="hex-inner">
+                        <span class="logo-text">S</span>
+                    </div>
+                </div>
+                <div class="brand-info">
+                    <h1 class="brand-name">SREE</h1>
+                    <span class="brand-sub">AI CORE v1.0</span>
+                </div>
+            </div>
+
+            <nav class="nav-menu">
+                <button class="nav-item active" data-tab="home">
+                    <span class="nav-icon">◈</span>
+                    <span class="nav-label">Dashboard</span>
+                </button>
+                <button class="nav-item" data-tab="chat">
+                    <span class="nav-icon">💬</span>
+                    <span class="nav-label">AI Chat</span>
+                </button>
+                <button class="nav-item" data-tab="voice">
+                    <span class="nav-icon">🎙️</span>
+                    <span class="nav-label">Voice Assistant</span>
+                </button>
+                <button class="nav-item" data-tab="memory">
+                    <span class="nav-icon">🧠</span>
+                    <span class="nav-label">Memory</span>
+                </button>
+                <button class="nav-item" data-tab="notes">
+                    <span class="nav-icon">📝</span>
+                    <span class="nav-label">Notes</span>
+                </button>
+                <button class="nav-item" data-tab="tasks">
+                    <span class="nav-icon">⏰</span>
+                    <span class="nav-label">Tasks & Reminders</span>
+                </button>
+                <button class="nav-item" data-tab="devices">
+                    <span class="nav-icon">⚡</span>
+                    <span class="nav-label">Device Control</span>
+                </button>
+                <button class="nav-item" data-tab="settings">
+                    <span class="nav-icon">⚙️</span>
+                    <span class="nav-label">Settings</span>
+                </button>
+            </nav>
+
+            <div class="sidebar-status-card">
+                <div class="status-header">
+                    <span class="pulse-dot" id="systemPulse"></span>
+                    <span class="status-title" id="systemStatusText">SYSTEM ACTIVE</span>
+                </div>
+                <div class="status-metric">
+                    <span class="metric-label">Model:</span>
+                    <span class="metric-val" id="activeModelLabel">llama3.2:3b</span>
+                </div>
+                <div class="status-metric">
+                    <span class="metric-label">RAM:</span>
+                    <span class="metric-val" id="ramUsageLabel">-- / 8 GB</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Panel -->
+        <main class="main-panel">
+            <!-- Header Bar -->
+            <header class="top-header">
+                <div class="mobile-brand">
+                    <span class="mobile-logo">◈ SREE</span>
+                </div>
+                <div class="header-status-pills">
+                    <div class="pill pill-network" id="networkPill">
+                        <span class="pill-dot"></span>
+                        <span class="pill-text" id="networkPillText">Localhost</span>
+                    </div>
+                    <div class="pill pill-ollama" id="ollamaPill">
+                        <span class="pill-dot"></span>
+                        <span class="pill-text" id="ollamaPillText">Ollama Ready</span>
+                    </div>
+                    <div class="pill pill-provider" id="providerPill">
+                        <span class="pill-dot" style="background-color: var(--neon-cyan);"></span>
+                        <span class="pill-text" id="providerPillText">Ollama (Local)</span>
+                    </div>
+                </div>
+                <div class="header-actions">
+                    <button class="icon-btn active" id="speakerToggleBtn" title="Voice Output Active (Click to Mute/Unmute)">
+                        <span class="btn-icon" id="speakerIcon">🔊</span>
+                    </button>
+                    <button class="icon-btn" id="qrPairHeaderBtn" title="Show Phone Pairing QR Code">
+                        <span class="btn-icon">📱</span>
+                    </button>
+                    <button class="icon-btn" id="voiceToggleBtn" title="Toggle Live Conversation Mode">
+                        <span class="btn-icon">🎙️</span>
+                    </button>
+                    <button class="icon-btn" id="clearChatBtn" title="Clear Conversation">
+                        <span class="btn-icon">🗑️</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Dynamic Tab Content Views -->
+            <div class="tab-content" id="tabContent">
+                <!-- VIEW 1: HOME / DASHBOARD -->
+                <section class="view active" id="view-home">
+                    <div class="home-hero">
+                        <div class="greeting-box">
+                            <span class="greeting-eyebrow">PERSONAL DIGITAL INTELLIGENCE</span>
+                            <h2 class="greeting-heading" id="greetingText">Good morning, Boss</h2>
+                            <p class="greeting-desc">SREE local neural core is calibrated and awaiting your command.</p>
+                        </div>
+
+                        <!-- Central JARVIS Animated Arc Reactor / AI Orb -->
+                        <div class="orb-container">
+                            <div class="orb-outer-ring"></div>
+                            <div class="orb-dashed-ring"></div>
+                            <div class="orb-inner-ring"></div>
+                            <div class="orb-core" id="orbCore">
+                                <div class="orb-core-glow"></div>
+                                <div class="orb-energy-pulse"></div>
+                                <span class="orb-symbol">◈</span>
+                            </div>
+                        </div>
+
+                        <button class="live-conversation-hero-btn" id="liveConversationHeroBtn">
+                            <span class="pulse-dot-cyan"></span>
+                            <span>🎙️ START LIVE CONVERSATION ("Hi Sree")</span>
+                        </button>
+
+                        <div class="voice-status-banner" id="voiceBanner">
+                            <span class="voice-wave-bar"></span>
+                            <span class="voice-wave-bar"></span>
+                            <span class="voice-wave-bar"></span>
+                            <span class="voice-wave-bar"></span>
+                            <span class="voice-status-text" id="voiceStatusText">Voice standby (Click Orb or button to speak)</span>
+                        </div>
+
+                        <!-- Real-time Siri Spoken Subtitle Badge -->
+                        <div class="siri-subtitle-card" id="floatingSubtitle" style="display: none;">
+                            <span class="siri-pulse-dot"></span>
+                            <span class="siri-transcript-text" id="siriSubtitleText">Listening...</span>
+                        </div>
+
+                        <!-- Quick Action Prompts -->
+                        <div class="quick-chips">
+                            <button class="chip" data-prompt="What can you do as SREE?">💡 Capabilities</button>
+                            <button class="chip" data-prompt="Open calculator for me.">🧮 Open Calculator</button>
+                            <button class="chip" data-prompt="Remember that my favorite programming language is Python.">🧠 Test Memory</button>
+                            <button class="chip" data-prompt="Remind me to review project tasks at 5 PM.">⏰ Set Reminder</button>
+                            <button class="chip" data-prompt="Search the web for latest AI news today.">🌐 Web Search</button>
+                            <button class="chip" id="quickPairChip">📱 Connect Android Phone</button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- VIEW 2: AI CHAT (Dedicated Full-Height View) -->
+                <section class="view" id="view-chat">
+                    <div class="chat-container">
+                        <div class="chat-messages" id="chatMessages">
+                            <div class="message-wrapper assistant">
+                                <div class="message-avatar">◈</div>
+                                <div class="message-bubble">
+                                    <div class="message-sender">SREE AI Core</div>
+                                    <div class="message-text">
+                                        Greetings! I am **SREE**, your personal digital assistant. I am running entirely on your local hardware with dedicated GPU acceleration. What shall we achieve today?
+                                    </div>
+                                    <div class="message-time" id="initTime">Just now</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Streaming typing indicator -->
+                        <div class="typing-indicator" id="typingIndicator" style="display: none;">
+                            <span></span><span></span><span></span>
+                            <span class="indicator-label">SREE is processing neural inference...</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- VIEW 3: VOICE ASSISTANT -->
+                <section class="view" id="view-voice">
+                    <div class="card glass-card center-card">
+                        <div class="voice-hero-orb" id="voiceHeroOrb">
+                            <span class="voice-big-icon">🎙️</span>
+                        </div>
+                        <h3 class="card-title">Two-Way Voice Interface</h3>
+                        <p class="card-sub">Local speech interaction with configurable voice controls.</p>
+                        
+                        <div class="voice-controls-row">
+                            <button class="btn btn-primary" id="startVoiceListenBtn">
+                                <span>🎙️ Start Listening</span>
+                            </button>
+                            <button class="btn btn-secondary" id="stopVoiceSpeechBtn">
+                                <span>⏹ Stop Speaking</span>
+                            </button>
+                        </div>
+
+                        <div class="voice-settings-grid">
+                            <div class="voice-setting-item">
+                                <label class="setting-label">Voice Selection</label>
+                                <select class="form-select" id="voiceSelect">
+                                    <option value="default">Default System Voice</option>
+                                </select>
+                            </div>
+                            <div class="voice-setting-item">
+                                <label class="setting-label">Speech Speed: <span id="rateVal">1.0x</span></label>
+                                <input type="range" class="form-range" id="voiceRateSlider" min="0.7" max="1.5" step="0.1" value="1.0">
+                            </div>
+                        </div>
+
+                        <div class="voice-transcript-card">
+                            <span class="transcript-title">Real-Time Transcription:</span>
+                            <p class="transcript-text" id="liveVoiceTranscript">Microphone is inactive. Click "Start Listening" or press the microphone icon.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- VIEW 4: MEMORY -->
+                <section class="view" id="view-memory">
+                    <div class="card glass-card">
+                        <div class="card-header-flex">
+                            <div>
+                                <h3 class="card-title">Personal Long-Term Memory</h3>
+                                <p class="card-sub">User-approved facts and preferences stored locally in SQLite.</p>
+                            </div>
+                            <button class="btn btn-sm btn-outline" id="addMemoryBtn">+ Add Memory</button>
+                        </div>
+                        <div class="memory-list" id="memoryList">
+                            <div class="empty-state">Loading personal memory...</div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- VIEW 5: NOTES -->
+                <section class="view" id="view-notes">
+                    <div class="card glass-card">
+                        <div class="card-header-flex">
+                            <div>
+                                <h3 class="card-title">Personal Encrypted Notes</h3>
+                                <p class="card-sub">Quick notes, meeting summaries, and snippets.</p>
+                            </div>
+                            <button class="btn btn-sm btn-primary" id="newNoteBtn">+ New Note</button>
+                        </div>
+                        <div class="search-bar-row">
+                            <input type="text" class="form-input" id="noteSearchInput" placeholder="Search notes by keyword or tags...">
+                        </div>
+                        <div class="notes-grid" id="notesGrid">
+                            <div class="empty-state">Loading notes...</div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- VIEW 6: TASKS & REMINDERS -->
+                <section class="view" id="view-tasks">
+                    <div class="card glass-card">
+                        <div class="card-header-flex">
+                            <div>
+                                <h3 class="card-title">Productivity & Reminders</h3>
+                                <p class="card-sub">Scheduled alarms and task items.</p>
+                            </div>
+                            <button class="btn btn-sm btn-primary" id="newTaskBtn">+ New Reminder</button>
+                        </div>
+                        <div class="tasks-list" id="tasksList">
+                            <div class="empty-state">Loading reminders...</div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- VIEW 7: DEVICE CONTROL -->
+                <section class="view" id="view-devices">
+                    <div class="card glass-card">
+                        <h3 class="card-title">Controlled Laptop Automation</h3>
+                        <p class="card-sub">Execute allowlisted applications and diagnostics with safety gates.</p>
+                        
+                        <div class="telemetry-bar" id="telemetryBar">
+                            <div class="telemetry-item">
+                                <span class="telemetry-title">Uptime</span>
+                                <span class="telemetry-value" id="uptimeVal">-- hrs</span>
+                            </div>
+                            <div class="telemetry-item">
+                                <span class="telemetry-title">Battery</span>
+                                <span class="telemetry-value" id="batteryVal">--</span>
+                            </div>
+                            <div class="telemetry-item">
+                                <span class="telemetry-title">CPU Load</span>
+                                <span class="telemetry-value" id="cpuLoadVal">--%</span>
+                            </div>
+                        </div>
+
+                        <h4 class="section-subtitle">Allowlisted Applications</h4>
+                        <div class="device-actions-grid">
+                            <div class="action-card" data-action="calculator">
+                                <span class="action-icon">🧮</span>
+                                <span class="action-name">Calculator</span>
+                                <button class="btn btn-sm btn-outline app-launch-btn" data-app="calculator">Launch</button>
+                            </div>
+                            <div class="action-card" data-action="notepad">
+                                <span class="action-icon">📝</span>
+                                <span class="action-name">Notepad</span>
+                                <button class="btn btn-sm btn-outline app-launch-btn" data-app="notepad">Launch</button>
+                            </div>
+                            <div class="action-card" data-action="browser">
+                                <span class="action-icon">🌐</span>
+                                <span class="action-name">Default Browser</span>
+                                <button class="btn btn-sm btn-outline app-launch-btn" data-app="browser">Launch</button>
+                            </div>
+                            <div class="action-card" data-action="terminal">
+                                <span class="action-icon">💻</span>
+                                <span class="action-name">Command Prompt</span>
+                                <button class="btn btn-sm btn-outline app-launch-btn" data-app="terminal">Launch</button>
+                            </div>
+                            <div class="action-card" data-action="explorer">
+                                <span class="action-icon">📁</span>
+                                <span class="action-name">File Explorer</span>
+                                <button class="btn btn-sm btn-outline app-launch-btn" data-app="explorer">Launch</button>
+                            </div>
+                            <div class="action-card" data-action="taskmgr">
+                                <span class="action-icon">📊</span>
+                                <span class="action-name">Task Manager</span>
+                                <button class="btn btn-sm btn-outline app-launch-btn" data-app="taskmgr">Launch</button>
+                            </div>
+                        </div>
+
+                        <h4 class="section-subtitle" style="margin-top: 24px;">Safe Document Search</h4>
+                        <div class="file-search-row">
+                            <input type="text" class="form-input" id="fileSearchInput" placeholder="Search files in approved folders (Documents, Downloads, Desktop)...">
+                            <button class="btn btn-outline" id="fileSearchBtn">Search Files</button>
+                        </div>
+                        <div class="file-results-box" id="fileResultsBox" style="display: none;"></div>
+                    </div>
+                </section>
+
+                <!-- VIEW 8: SETTINGS -->
+                <section class="view" id="view-settings">
+                    <div class="card glass-card">
+                        <h3 class="card-title">Assistant Settings & Security</h3>
+                        <p class="card-sub">Hardware parameters, wake-word detection, and data export.</p>
+                        
+                        <!-- UNIVERSAL MULTI-PROVIDER AI BRAIN -->
+                        <div class="settings-group">
+                            <label class="setting-label">Universal AI Brain & Multi-Provider Routing</label>
+                            <p class="setting-help">Choose between local offline GPU models or zero-cost cloud inference with automatic rate-limit failover.</p>
+                            
+                            <select class="form-select" id="providerSelect">
+                                <option value="ollama" selected>Ollama (100% Offline Local - RTX 2050 GPU)</option>
+                                <option value="groq">Groq Cloud (Ultra-Fast ~200ms - Free Tier)</option>
+                                <option value="openrouter">OpenRouter (100+ Free Models: Llama 3.3 70B, Gemini 2.0)</option>
+                                <option value="gemini">Google Gemini (Gemini 2.0 Flash - Free Key)</option>
+                                <option value="openai">OpenAI (GPT-4o / GPT-4o-mini)</option>
+                                <option value="custom">Custom Endpoint (LM Studio, LocalAI, vLLM, DeepSeek)</option>
+                            </select>
+                        </div>
+
+                        <!-- Local Ollama One-Click Model Chips -->
+                        <div class="settings-group" id="ollamaChipsGroup">
+                            <label class="setting-label">Local Ollama Model Chips (One-Click Activation)</label>
+                            <div class="model-chips-container" id="ollamaChipsContainer">
+                                <span class="chip active">llama3.2:3b (Active)</span>
+                            </div>
+                        </div>
+
+                        <!-- Dynamic Provider Credentials Box -->
+                        <div class="provider-credentials-box" id="providerCredsBox" style="display: none;">
+                            <div class="form-group" id="apiKeyGroup">
+                                <label class="setting-label" id="apiKeyLabel">API Key</label>
+                                <div class="password-input-wrapper">
+                                    <input type="password" class="form-input" id="providerApiKeyInput" placeholder="Enter API key...">
+                                    <button class="btn btn-sm btn-outline" id="toggleApiKeyVisibilityBtn" type="button">👁️</button>
+                                </div>
+                            </div>
+                            <div class="form-group" id="customUrlGroup" style="display: none;">
+                                <label class="setting-label">Custom Base URL (OpenAI-Compatible)</label>
+                                <input type="text" class="form-input" id="customBaseUrlInput" placeholder="http://localhost:1234/v1">
+                            </div>
+                            <div class="form-group" id="customModelGroup" style="display: none;">
+                                <label class="setting-label">Target Model Name</label>
+                                <input type="text" class="form-input" id="customModelInput" placeholder="e.g. deepseek-r1, llama-3.3-70b">
+                            </div>
+                            <div class="actions-row" style="margin-top: 10px;">
+                                <button class="btn btn-primary" id="saveProviderBtn">Save & Activate Provider</button>
+                                <button class="btn btn-secondary" id="testProviderBtn">Test Connection</button>
+                            </div>
+                            <div class="provider-test-result" id="providerTestResult" style="display: none; margin-top: 8px;"></div>
+                        </div>
+
+                        <div class="settings-group">
+                            <label class="setting-label">Wake-Word Detection ("Hey Sree" / "Hey Sri")</label>
+                            <div class="toggle-switch">
+                                <input type="checkbox" id="wakeWordToggle">
+                                <label for="wakeWordToggle" class="switch-label"></label>
+                                <span class="toggle-desc" id="wakeWordDesc">Disabled (Requires explicit activation)</span>
+                            </div>
+                        </div>
+
+                        <!-- Android Phone Pairing Card with QR Code -->
+                        <div class="settings-group">
+                            <label class="setting-label">Android Smartphone Instant Pairing</label>
+                            <p class="setting-help">Scan this QR Code with your phone camera, or open the link below on the same Wi-Fi:</p>
+                            
+                            <div class="qr-pairing-box">
+                                <img src="/api/system/qrcode" class="pairing-qr-img" alt="Scan to connect Android Phone" title="Scan with camera">
+                                <div class="pairing-details">
+                                    <span class="qr-label">Direct Mobile Connection:</span>
+                                    <div class="code-banner" id="mobileUrlDisplay">http://localhost:8005</div>
+                                    <button class="btn btn-sm btn-outline" id="copyUrlBtn" style="margin-top: 8px;">Copy URL</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr class="divider">
+
+                        <div class="settings-group">
+                            <h4 class="section-subtitle">Data Privacy & Sovereignty</h4>
+                            <p class="setting-help">You have complete ownership of all local data. You can export or erase records at any time.</p>
+                            <div class="privacy-actions-row">
+                                <a href="/api/data/export" download="sree_personal_data_export.json" class="btn btn-outline" style="text-decoration: none;">
+                                    📥 Export All Data (JSON)
+                                </a>
+                                <button class="btn btn-danger" id="wipeDataBtn">
+                                    🗑️ Erase All Personal Data
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Persistent Bottom Chat / Voice Bar -->
+            <footer class="bottom-input-bar">
+                <button class="mic-button" id="micBtn" title="Hold or Click to Speak">
+                    <span class="mic-pulse"></span>
+                    <span class="mic-icon">🎙️</span>
+                </button>
+                <div class="input-container">
+                    <textarea class="chat-input" id="chatInput" rows="1" placeholder="Type a message or say 'Hey Sree'..." autocomplete="off"></textarea>
+                </div>
+                <button class="send-button" id="sendBtn" title="Send Message">
+                    <span class="send-icon">➤</span>
+                </button>
+            </footer>
+        </main>
+    </div>
+
+    <!-- Mobile Navigation Bottom Bar -->
+    <nav class="mobile-bottom-nav">
+        <button class="mob-nav-item active" data-tab="home">◈ Home</button>
+        <button class="mob-nav-item" data-tab="chat">💬 Chat</button>
+        <button class="mob-nav-item" data-tab="voice">🎙️ Voice</button>
+        <button class="mob-nav-item" data-tab="notes">📝 Notes</button>
+        <button class="mob-nav-item" data-tab="devices">⚡ Device</button>
+        <button class="mob-nav-item" data-tab="settings">⚙️ Settings</button>
+    </nav>
+
+    <!-- Modal: QR Code Mobile Pairing Popup -->
+    <div class="modal-backdrop" id="qrModal">
+        <div class="modal-card center-card">
+            <h3 class="modal-title">📱 Connect Android Phone</h3>
+            <p class="card-sub" style="margin-bottom: 12px;">Scan with your Android camera or QR scanner</p>
+            <img src="/api/system/qrcode" class="pairing-qr-img large" alt="Scan to connect Android Phone">
+            <div class="code-banner" id="modalMobileUrlDisplay">http://localhost:8005</div>
+            <div class="modal-actions" style="margin-top: 14px;">
+                <button class="btn btn-primary" id="closeQrModalBtn">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Add Memory -->
+    <div class="modal-backdrop" id="memoryModal">
+        <div class="modal-card">
+            <h3 class="modal-title">Record Personal Fact</h3>
+            <div class="form-group">
+                <label class="setting-label">Category</label>
+                <select class="form-select" id="memCategoryInput">
+                    <option value="preference">User Preference</option>
+                    <option value="identity">Personal Fact / Identity</option>
+                    <option value="work">Work & Projects</option>
+                    <option value="general" selected>General</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="setting-label">Fact Name (Key)</label>
+                <input type="text" class="form-input" id="memKeyInput" placeholder="e.g. Favorite Language">
+            </div>
+            <div class="form-group">
+                <label class="setting-label">Fact Details (Value)</label>
+                <textarea class="form-input" id="memValInput" rows="3" placeholder="e.g. Python and Rust"></textarea>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" id="cancelMemBtn">Cancel</button>
+                <button class="btn btn-primary" id="saveMemBtn">Save Memory</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: New Note -->
+    <div class="modal-backdrop" id="noteModal">
+        <div class="modal-card">
+            <h3 class="modal-title">Create Encrypted Note</h3>
+            <div class="form-group">
+                <label class="setting-label">Note Title</label>
+                <input type="text" class="form-input" id="noteTitleInput" placeholder="Title...">
+            </div>
+            <div class="form-group">
+                <label class="setting-label">Tags (comma separated)</label>
+                <input type="text" class="form-input" id="noteTagsInput" placeholder="ideas, work, personal">
+            </div>
+            <div class="form-group">
+                <label class="setting-label">Note Content</label>
+                <textarea class="form-input" id="noteContentInput" rows="5" placeholder="Write your thoughts..."></textarea>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" id="cancelNoteBtn">Cancel</button>
+                <button class="btn btn-primary" id="saveNoteBtn">Save Note</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: New Reminder -->
+    <div class="modal-backdrop" id="reminderModal">
+        <div class="modal-card">
+            <h3 class="modal-title">Create Reminder</h3>
+            <div class="form-group">
+                <label class="setting-label">Reminder Title</label>
+                <input type="text" class="form-input" id="remindTitleInput" placeholder="What to remember...">
+            </div>
+            <div class="form-group">
+                <label class="setting-label">Due Time / Note</label>
+                <input type="text" class="form-input" id="remindTimeInput" placeholder="Today 5:00 PM or Tomorrow">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" id="cancelRemindBtn">Cancel</button>
+                <button class="btn btn-primary" id="saveRemindBtn">Save Reminder</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- App Script -->
+    <script src="/js/app.js"></script>
+</body>
+</html>

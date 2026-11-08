@@ -1,0 +1,20 @@
+# Environment
+.env
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Data & Models
+data/database/*.db
+data/database/*.sqlite3
+data/cache/
+*.log
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
