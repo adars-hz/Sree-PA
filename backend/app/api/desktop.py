@@ -114,3 +114,4 @@ def control_keyboard(req: KeyboardControlRequest) -> Dict[str, Any]:
 def execute_os_action(req: SystemActionRequest) -> Dict[str, Any]:
     """Executes high-level desktop management command."""
     return desktop_control.execute_system_action(req.action)
+

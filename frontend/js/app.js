@@ -24,6 +24,7 @@ class SreeApp {
         this.synthesis = window.speechSynthesis || null;
         this.audioCtx = null;
         this.speechDebounceTimer = null;
+        this.wakeSilenceTimer = null;
         this.speechKeepAliveTimer = null;
         this.ttsWatchdogTimer = null;
         this.isProcessingCommand = false;
@@ -606,6 +607,17 @@ class SreeApp {
                         subtitleCard.style.display = 'inline-flex';
                         subtitleText.textContent = "⚡ SREE: I'm listening... What can I do for you?";
                     }
+
+                    // Snappy silence timeout: if user does not speak within 2.6s, exit listening
+                    clearTimeout(this.wakeSilenceTimer);
+                    this.wakeSilenceTimer = setTimeout(() => {
+                        if (this.isRecording && !this.isProcessingCommand && !this.isSpeaking) {
+                            this.playChime('siri_end');
+                            this.setOrbState('idle');
+                            if (this.voiceStatusText) this.voiceStatusText.textContent = "SREE is ready.";
+                            if (subtitleCard) subtitleCard.style.display = 'none';
+                        }
+                    }, 2600);
                     return;
                 }
 
@@ -613,13 +625,15 @@ class SreeApp {
                 let cleanedCommand = currentText.replace(/^(?:hi|hey|hello|ok|okay)\s*(?:sree|sri|shree|shri|siri|three|tree|see)[,\s]*/i, "").trim();
                 if (!cleanedCommand) cleanedCommand = currentText;
 
-                // 5. Siri-Speed Silence Debounce (550ms):
-                // Instead of waiting 3 seconds for browser isFinal, we commit 550ms after speech pauses!
+                // 5. Siri-Speed Silence Debounce (420ms):
+                // Snappy cutoff as soon as speech finishes!
+                clearTimeout(this.wakeSilenceTimer);
+                this.wakeSilenceTimer = null;
                 clearTimeout(this.speechDebounceTimer);
                 if (cleanedCommand.length >= 2) {
                     this.speechDebounceTimer = setTimeout(() => {
                         this.commitSpokenCommand(cleanedCommand);
-                    }, 550);
+                    }, 420);
                 }
             };
 
@@ -759,6 +773,8 @@ class SreeApp {
 
         clearTimeout(this.speechDebounceTimer);
         this.speechDebounceTimer = null;
+        clearTimeout(this.wakeSilenceTimer);
+        this.wakeSilenceTimer = null;
         
         // Use abort() so Chrome immediately drops pending buffers and doesn't emit duplicate onresult
         try { this.recognition.abort(); } catch (e) {}

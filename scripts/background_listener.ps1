@@ -268,9 +268,9 @@ $speechHandler = {
         Play-Chime "start"
         Speak-Text "I'm listening."
         
-        # Enable 8-second conversation window for the user to speak their command
+        # Snappy iOS Siri window: 2.8 seconds maximum for user to speak
         $global:inConversation = $true
-        $global:conversationExpires = [DateTime]::Now.AddSeconds(8)
+        $global:conversationExpires = [DateTime]::Now.AddSeconds(2.8)
         $gFollowup.Enabled = $true
         return
     }
@@ -307,8 +307,9 @@ try {
         if ($global:inConversation -and ([DateTime]::Now -gt $global:conversationExpires)) {
             $global:inConversation = $false
             $gFollowup.Enabled = $false # Re-lock strictly into standby
+            Play-Chime "done"
         }
-        Start-Sleep -Seconds 1
+        Start-Sleep -Milliseconds 150
     }
 } finally {
     $recognizer.RecognizeAsyncStop()
