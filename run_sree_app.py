@@ -7,7 +7,7 @@ Features:
 - Full System Tray Control Menu (Voice toggle, Biometrics toggle, Startup toggle, Screen share)
 - Auto-starts Ollama daemon
 - Auto-starts silent background voice listener ("Hey Sree")
-- Dedicated frameless JARVIS Holographic Cockpit window
+- Dedicated frameless SREE Holographic Cockpit window
 - One-click installer & shortcut creator
 """
 
@@ -280,7 +280,7 @@ def create_desktop_and_start_menu_shortcuts():
         $d.TargetPath = '{exe_path}'
         $d.WorkingDirectory = '{work_dir}'
         if (Test-Path '{icon_path}') {{ $d.IconLocation = '{icon_path}, 0' }}
-        $d.Description = 'SREE - JARVIS AI Assistant & Desktop Controller'
+        $d.Description = 'SREE - Personal AI Assistant & Desktop Controller'
         $d.Save()
 
         # Start Menu
@@ -288,7 +288,7 @@ def create_desktop_and_start_menu_shortcuts():
         $s.TargetPath = '{exe_path}'
         $s.WorkingDirectory = '{work_dir}'
         if (Test-Path '{icon_path}') {{ $s.IconLocation = '{icon_path}, 0' }}
-        $s.Description = 'SREE - JARVIS AI Assistant & Desktop Controller'
+        $s.Description = 'SREE - Personal AI Assistant & Desktop Controller'
         $s.Save()
         """
         subprocess.run(["powershell", "-NoProfile", "-Command", ps_script], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -395,7 +395,7 @@ def exit_sree(icon=None, item=None):
 
 def build_tray_menu():
     return Menu(
-        item('⚡ Open JARVIS Cockpit', launch_app_window, default=True),
+        item('⚡ Open SREE Cockpit', launch_app_window, default=True),
         Menu.SEPARATOR,
         item('🎙️ Voice Wake-Word ("Hey Sree")', toggle_background_listener, checked=lambda item: is_listener_running()),
         item('🔒 Speaker Biometric Gate', toggle_voice_verification, checked=lambda item: is_voice_verified()),
@@ -430,7 +430,7 @@ def main():
     # 3. Create Shortcuts on first run if not existing
     create_desktop_and_start_menu_shortcuts()
 
-    # 4. Open JARVIS Cockpit Window
+    # 4. Open SREE Cockpit Window
     launch_app_window()
 
     # 5. Initialize System Tray Icon (runs message loop on main thread)
@@ -438,7 +438,7 @@ def main():
     _tray_icon = pystray.Icon(
         "SREE",
         tray_image,
-        "SREE – JARVIS AI Assistant",
+        "SREE – Personal AI Assistant",
         build_tray_menu()
     )
 

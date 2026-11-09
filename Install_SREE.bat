@@ -24,11 +24,11 @@ if not exist "dist\SREE.exe" (
 )
 
 echo [*] Creating Windows Desktop Shortcut...
-powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('%USERPROFILE%\Desktop\SREE AI Assistant.lnk'); $s.TargetPath = '%~dp0dist\SREE.exe'; $s.WorkingDirectory = '%~dp0dist'; if (Test-Path '%~dp0sree.ico') { $s.IconLocation = '%~dp0sree.ico,0' }; $s.Description = 'SREE - JARVIS AI Assistant & Desktop Controller'; $s.Save()"
+powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('%USERPROFILE%\Desktop\SREE AI Assistant.lnk'); $s.TargetPath = '%~dp0dist\SREE.exe'; $s.WorkingDirectory = '%~dp0dist'; if (Test-Path '%~dp0sree.ico') { $s.IconLocation = '%~dp0sree.ico,0' }; $s.Description = 'SREE - Personal AI Assistant & Desktop Controller'; $s.Save()"
 
 echo [*] Creating Windows Start Menu Entry...
 if not exist "%APPDATA%\Microsoft\Windows\Start Menu\Programs\SREE" mkdir "%APPDATA%\Microsoft\Windows\Start Menu\Programs\SREE"
-powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('%APPDATA%\Microsoft\Windows\Start Menu\Programs\SREE\SREE AI Assistant.lnk'); $s.TargetPath = '%~dp0dist\SREE.exe'; $s.WorkingDirectory = '%~dp0dist'; if (Test-Path '%~dp0sree.ico') { $s.IconLocation = '%~dp0sree.ico,0' }; $s.Description = 'SREE - JARVIS AI Assistant & Desktop Controller'; $s.Save()"
+powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('%APPDATA%\Microsoft\Windows\Start Menu\Programs\SREE\SREE AI Assistant.lnk'); $s.TargetPath = '%~dp0dist\SREE.exe'; $s.WorkingDirectory = '%~dp0dist'; if (Test-Path '%~dp0sree.ico') { $s.IconLocation = '%~dp0sree.ico,0' }; $s.Description = 'SREE - Personal AI Assistant & Desktop Controller'; $s.Save()"
 
 echo [*] Configuring 24/7 Windows Auto-Startup...
 powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\SREE.lnk'); $s.TargetPath = '%~dp0dist\SREE.exe'; $s.WorkingDirectory = '%~dp0dist'; $s.Description = 'SREE Background AI Assistant'; $s.Save()"
