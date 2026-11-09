@@ -112,6 +112,13 @@ class SreeApp {
                 const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
                 dateEl.textContent = `${days[now.getDay()]} ${now.getDate()} ${months[now.getMonth()]}`;
             }
+            const initLog = document.getElementById('initLogTime');
+            if (initLog && !initLog.dataset.set) {
+                const h = String(now.getHours()).padStart(2, '0');
+                const m = String(now.getMinutes()).padStart(2, '0');
+                initLog.textContent = `${h}:${m}`;
+                initLog.dataset.set = "true";
+            }
         };
 
         update();
@@ -696,10 +703,10 @@ class SreeApp {
 
         this.appendMessage('user', text);
         this.conversationHistory.push({ role: 'user', content: text });
-        this.logAction('VOICE', text);
+        this.logAction('USER', text);
 
         const sub = document.getElementById('siriSubtitleText');
-        if (sub) sub.textContent = `"${text}"`;
+        if (sub) sub.textContent = `⚡ Processing: "${text}"...`;
 
         this.isGenerating = true;
         this.showTyping(true);
@@ -734,11 +741,12 @@ class SreeApp {
                 const chunk = decoder.decode(value, { stream: true });
                 fullReply += chunk;
                 if (streamTextElem) streamTextElem.innerHTML = this.formatMarkdown(fullReply);
+                if (sub) sub.textContent = `⚡ SREE: ${fullReply.slice(0, 100)}...`;
                 this.scrollChatToBottom();
             }
 
             this.conversationHistory.push({ role: 'assistant', content: fullReply });
-            this.logAction('ACTION', fullReply);
+            this.logAction('SREE', fullReply);
             if (sub) sub.textContent = `⚡ SREE: ${fullReply}`;
 
             this.setOrbState('idle');
@@ -747,19 +755,33 @@ class SreeApp {
             // CRITICAL: Speak response out loud automatically if voice response is enabled!
             if (this.voiceResponseEnabled) {
                 this.speak(fullReply);
+            } else {
+                this.isProcessingCommand = false;
+                this.ignoreSpeechResults = false;
+                this.setOrbState('idle');
             }
 
         } catch (error) {
             console.error("Chat error:", error);
             this.showTyping(false);
-            const errMsg = `Operational Alert: Unable to process request. ${error.message}`;
+            const errMsg = `Notice: Unable to process request. ${error.message}`;
             this.appendMessage('assistant', `⚠️ **${errMsg}**`);
+            this.logAction('SYSTEM', errMsg);
             this.setOrbState('idle');
+            this.isProcessingCommand = false;
+            this.ignoreSpeechResults = false;
             if (this.voiceResponseEnabled) {
-                this.speak("I encountered an issue processing that command.");
+                this.speak("I encountered an issue connecting to the core server.");
             }
         } finally {
             this.isGenerating = false;
+            // Failsafe watchdog: unlock speech processing within 4 seconds in case speech engine lags
+            setTimeout(() => {
+                if (!this.isSpeaking) {
+                    this.isProcessingCommand = false;
+                    this.ignoreSpeechResults = false;
+                }
+            }, 4000);
         }
     }
 
@@ -810,7 +832,15 @@ class SreeApp {
             if (labelEl) labelEl.textContent = 'LISTENING';
             if (sub) sub.textContent = 'Listening... Speak your command';
             if (this.orbCore) this.orbCore.style.boxShadow = '0 0 80px rgba(0, 242, 254, 0.95)';
+
+            clearTimeout(this.listeningStateWatchdog);
+            this.listeningStateWatchdog = setTimeout(() => {
+                if (!this.isProcessingCommand && !this.isSpeaking && !this.isGenerating) {
+                    this.setOrbState('idle');
+                }
+            }, 6500);
         } else {
+            clearTimeout(this.listeningStateWatchdog);
             if (reactor) reactor.classList.remove('listening', 'speaking', 'thinking');
             if (statusEl) {
                 statusEl.textContent = 'STANDBY';
@@ -901,7 +931,7 @@ class SreeApp {
                     clearTimeout(this.speechDebounceTimer);
                     this.speechDebounceTimer = null;
                     const now = Date.now();
-                    if ((now - this.lastCommittedTime) < 2000) return; // Prevent double wake
+                    if ((now - this.lastCommittedTime) < 1800) return; // Prevent double wake
                     this.lastCommittedTime = now;
                     this.playChime('siri_start');
                     this.triggerHaptic([30, 40]);
@@ -915,8 +945,9 @@ class SreeApp {
                         subtitleCard.style.display = 'inline-flex';
                         subtitleText.textContent = "⚡ SREE: I'm listening... What can I do for you?";
                     }
+                    this.logAction('WAKE', 'Wake word recognized. Listening for command...');
 
-                    // Comfortable silence timeout: if user does not speak within 5.0s, exit listening
+                    // Comfortable silence timeout: if user does not speak within 5.5s, exit listening
                     clearTimeout(this.wakeSilenceTimer);
                     this.wakeSilenceTimer = setTimeout(() => {
                         if (this.isRecording && !this.isProcessingCommand && !this.isSpeaking) {
@@ -925,7 +956,7 @@ class SreeApp {
                             if (this.voiceStatusText) this.voiceStatusText.textContent = "SREE is ready.";
                             if (subtitleCard) subtitleCard.style.display = 'none';
                         }
-                    }, 5000);
+                    }, 5500);
                     return;
                 }
 
@@ -948,8 +979,8 @@ class SreeApp {
             this.recognition.onerror = (event) => {
                 console.warn("Speech recognition notice:", event.error);
                 if (event.error === 'not-allowed') {
-                    alert("Microphone permission was denied. Please allow microphone access in your browser address bar.");
-                    this.liveConversationActive = false;
+                    this.logAction('SYSTEM', 'Microphone blocked. Click the Arc Reactor or window to allow.');
+                    this.setOrbState('idle');
                 }
             };
 
@@ -958,11 +989,11 @@ class SreeApp {
                 this.micBtn.classList.remove('recording');
 
                 // If live conversation is active and SREE is NOT currently speaking, resume listening immediately!
-                if (this.liveConversationActive && !this.isSpeaking && !this.isGenerating) {
+                if (this.liveConversationActive && !this.isSpeaking && !this.isGenerating && !this.isProcessingCommand) {
                     setTimeout(() => {
                         this.startVoiceInputSilent();
                     }, 200);
-                } else if (!this.isSpeaking) {
+                } else if (!this.isSpeaking && !this.isProcessingCommand) {
                     this.setOrbState('idle');
                 }
             };
@@ -1078,6 +1109,21 @@ class SreeApp {
                 rateVal.textContent = `${this.speechRate}x`;
             });
         }
+
+        // Auto-start continuous wake-word listening on startup
+        this.liveConversationActive = true;
+        setTimeout(() => {
+            this.startVoiceInputSilent();
+        }, 800);
+
+        // Document interaction ensures browser audio context & mic are unblocked immediately
+        const kickstartAudio = () => {
+            if (this.liveConversationActive && !this.isRecording && !this.isSpeaking && !this.isProcessingCommand) {
+                this.startVoiceInputSilent();
+            }
+        };
+        document.addEventListener('click', kickstartAudio, { passive: true });
+        document.addEventListener('keydown', kickstartAudio, { passive: true });
     }
 
     commitSpokenCommand(commandText) {
@@ -1109,7 +1155,6 @@ class SreeApp {
 
         this.playChime('siri_end');
         this.triggerHaptic([20]);
-        this.switchTab('chat');
         this.sendUserMessage(commandText);
     }
 
@@ -1156,7 +1201,13 @@ class SreeApp {
     }
 
     speak(text) {
-        if (!this.synthesis || !this.voiceResponseEnabled) return;
+        if (!this.synthesis || !this.voiceResponseEnabled) {
+            this.isSpeaking = false;
+            this.isProcessingCommand = false;
+            this.ignoreSpeechResults = false;
+            this.setOrbState('idle');
+            return;
+        }
         this.synthesis.cancel(); // Stop prior speech
         clearTimeout(this.ttsWatchdogTimer);
 
@@ -1170,9 +1221,15 @@ class SreeApp {
             .replace(/https?:\/\/\S+/g, '') // Remove raw urls from speech
             .trim();
 
-        if (!cleanText) return;
+        if (!cleanText) {
+            this.isSpeaking = false;
+            this.isProcessingCommand = false;
+            this.ignoreSpeechResults = false;
+            this.setOrbState('idle');
+            return;
+        }
 
-        // Siri-Style Voice Chunking: Speak the first 2 concise sentences for voice speed
+        // Voice Chunking: Speak the first 2 concise sentences for voice speed
         const sentences = cleanText.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [cleanText];
         const voiceText = sentences.slice(0, 3).join(' ').trim();
 
@@ -1194,24 +1251,35 @@ class SreeApp {
             this.setOrbState('speaking');
         };
 
+        let hasFinished = false;
         const finishSpeaking = () => {
-            if (!this.isSpeaking) return;
+            if (hasFinished) return;
+            hasFinished = true;
             this.isSpeaking = false;
             this.isProcessingCommand = false;
             this.ignoreSpeechResults = false;
             this.setOrbState('idle');
             clearTimeout(this.ttsWatchdogTimer);
 
-            const subtitleCard = document.getElementById('floatingSubtitle');
-            if (subtitleCard) {
-                setTimeout(() => { subtitleCard.style.display = 'none'; }, 1500);
+            if (this.speechKeepAliveTimer) {
+                clearInterval(this.speechKeepAliveTimer);
+                this.speechKeepAliveTimer = null;
             }
 
-            // CRITICAL: If Live Conversation is active, automatically resume Siri listening loop!
+            const sub = document.getElementById('siriSubtitleText');
+            if (sub) {
+                setTimeout(() => {
+                    if (!this.isSpeaking && !this.isGenerating) {
+                        sub.textContent = 'Listening for "Hey Sree"...';
+                    }
+                }, 2200);
+            }
+
+            // CRITICAL: Automatically resume Siri listening loop!
             if (this.liveConversationActive) {
                 setTimeout(() => {
                     this.startVoiceInputSilent();
-                }, 250);
+                }, 300);
             }
         };
 
@@ -1224,7 +1292,7 @@ class SreeApp {
 
         // TTS Watchdog: calculated duration + 2.5 second buffer to prevent Chrome hanging
         const wordCount = voiceText.split(/\s+/).length;
-        const estimatedMs = (wordCount / 2.8) * 1000 + 2500;
+        const estimatedMs = Math.max(3000, (wordCount / 2.8) * 1000 + 2500);
         this.ttsWatchdogTimer = setTimeout(finishSpeaking, estimatedMs);
 
         // Chrome keep-alive heartbeat while speaking

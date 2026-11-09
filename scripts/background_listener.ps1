@@ -219,13 +219,13 @@ $speechHandler = {
     $heard = $e.Result.Text.Trim()
     $confidence = $e.Result.Confidence
 
-    # Confidence threshold: wake word requires 0.55 to prevent false triggers;
-    # active conversation accepts 0.40 so speech is not dropped.
-    $minConfidence = if ($global:inConversation) { 0.40 } else { 0.55 }
+    # Confidence threshold: wake word requires 0.50 to prevent false triggers;
+    # active conversation accepts 0.20 so dictation/speech is not dropped.
+    $minConfidence = if ($global:inConversation) { 0.20 } else { 0.50 }
     if ($confidence -lt $minConfidence) { return }
 
-    # Drop audio if SREE is currently speaking through the speakers (prevent self-echo)
-    if ($synth.State -eq [System.Speech.Synthesis.SynthesizerState]::Speaking) {
+    # Drop audio only if SREE is speaking an assistant response (not during user turn)
+    if ($synth.State -eq [System.Speech.Synthesis.SynthesizerState]::Speaking -and -not $global:inConversation) {
         return
     }
 
@@ -271,13 +271,12 @@ $speechHandler = {
         if (($now - $global:lastWakeTime).TotalSeconds -lt 1.5) { return }
         $global:lastWakeTime = $now
 
-        Write-Output "[Heard Wake Word] '$heard' -> Acknowledging and listening..."
+        Write-Output "[Heard Wake Word] '$heard' -> Chime and listening for command..."
         Play-Chime "start"
-        Speak-Text "I'm listening."
 
-        # Activate conversation window: 5.5 seconds provides comfortable time to speak command
+        # Activate conversation window: 6.0 seconds provides ample time to speak command
         $global:inConversation = $true
-        $global:conversationExpires = [DateTime]::Now.AddSeconds(5.5)
+        $global:conversationExpires = [DateTime]::Now.AddSeconds(6.0)
         $gFollowup.Enabled = $true
         $gDictation.Enabled = $true
         return

@@ -337,11 +337,17 @@ def launch_app_window(icon=None, item=None):
         r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe"
     ]
 
+    profile_dir = Path(os.environ.get("APPDATA", str(Path.home()))) / "SREE" / "browser_profile"
+    profile_dir.mkdir(parents=True, exist_ok=True)
+
     for exe in browser_paths:
         if os.path.exists(exe):
             _current_app_process = subprocess.Popen([
                 exe,
                 f"--app={URL}",
+                f"--user-data-dir={profile_dir}",
+                "--use-fake-ui-for-media-stream",
+                "--autoplay-policy=no-user-gesture-required",
                 "--window-size=1280,840"
             ])
             return _current_app_process
