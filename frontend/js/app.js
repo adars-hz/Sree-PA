@@ -916,7 +916,7 @@ class SreeApp {
                         subtitleText.textContent = "⚡ SREE: I'm listening... What can I do for you?";
                     }
 
-                    // Snappy silence timeout: if user does not speak within 2.6s, exit listening
+                    // Comfortable silence timeout: if user does not speak within 5.0s, exit listening
                     clearTimeout(this.wakeSilenceTimer);
                     this.wakeSilenceTimer = setTimeout(() => {
                         if (this.isRecording && !this.isProcessingCommand && !this.isSpeaking) {
@@ -925,7 +925,7 @@ class SreeApp {
                             if (this.voiceStatusText) this.voiceStatusText.textContent = "SREE is ready.";
                             if (subtitleCard) subtitleCard.style.display = 'none';
                         }
-                    }, 2600);
+                    }, 5000);
                     return;
                 }
 
