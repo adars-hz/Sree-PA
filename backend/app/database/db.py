@@ -1,183 +1,174 @@
 """
-SQLite Database Layer for Project SREE
-Manages local-first relational storage for conversations, memory, notes, reminders, and settings.
+SQLAlchemy Database Layer for Project SREE
+Transitioned from raw sqlite3 to SQLAlchemy for better maintainability and Alembic migrations.
 """
 
-import sqlite3
-import json
 import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from pathlib import Path
+from sqlalchemy import create_engine, Column, Integer, String, Text, Boolean, DateTime, ForeignKey, Index, text
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.sql import func
 from ..core.config import settings
+from ..core.logger import logger
 
-logger = logging.getLogger("sree.database")
+# Base class for models
+Base = declarative_base()
+
+class Conversation(Base):
+    __tablename__ = 'conversations'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(String, nullable=False, index=True)
+    role = Column(String, nullable=False)
+    content = Column(Text, nullable=False)
+    model = Column(String)
+    tokens = Column(Integer, default=0)
+    created_at = Column(DateTime, server_default=func.current_timestamp())
+
+class Memory(Base):
+    __tablename__ = 'memories'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    category = Column(String, default='general')
+    key = Column(String, nullable=False, unique=True)
+    value = Column(Text, nullable=False)
+    approved = Column(Boolean, default=True)
+    created_at = Column(DateTime, server_default=func.current_timestamp())
+    updated_at = Column(DateTime, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
+
+class Note(Base):
+    __tablename__ = 'notes'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    title = Column(String, nullable=False, index=True)
+    content = Column(Text, nullable=False)
+    tags = Column(String, default='')
+    created_at = Column(DateTime, server_default=func.current_timestamp())
+    updated_at = Column(DateTime, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
+
+class Reminder(Base):
+    __tablename__ = 'reminders'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    title = Column(String, nullable=False)
+    description = Column(Text, default='')
+    due_time = Column(String)
+    priority = Column(String, default='normal')
+    completed = Column(Boolean, default=False, index=True)
+    created_at = Column(DateTime, server_default=func.current_timestamp())
+
+class UserSetting(Base):
+    __tablename__ = 'user_settings'
+    key = Column(String, primary_key=True)
+    value = Column(Text, nullable=False)
+    updated_at = Column(DateTime, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
 
 class DatabaseManager:
     def __init__(self, db_path: Optional[Path] = None):
         self.db_path = db_path or settings.DB_PATH
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self.init_database()
 
-    def get_connection(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL;")  # Write-Ahead Logging for high concurrency
-        conn.execute("PRAGMA foreign_keys=ON;")
-        return conn
+        # Create SQLAlchemy engine
+        self.engine = create_engine(
+            f"sqlite:///{self.db_path}",
+            connect_args={"check_same_thread": False}
+        )
 
-    def init_database(self):
-        """Creates tables and indexes if they do not exist."""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            
-            # 1. Conversations table
-            cursor.execute("""
-            CREATE TABLE IF NOT EXISTS conversations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id TEXT NOT NULL,
-                role TEXT NOT NULL,
-                content TEXT NOT NULL,
-                model TEXT,
-                tokens INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-            """)
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_conversations_session ON conversations(session_id);")
-
-            # 2. Long-term memory table
-            cursor.execute("""
-            CREATE TABLE IF NOT EXISTS memories (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                category TEXT DEFAULT 'general',
-                key TEXT NOT NULL,
-                value TEXT NOT NULL,
-                approved INTEGER DEFAULT 1,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-            """)
-            cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_memory_key ON memories(key);")
-
-            # 3. Notes table
-            cursor.execute("""
-            CREATE TABLE IF NOT EXISTS notes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                title TEXT NOT NULL,
-                content TEXT NOT NULL,
-                tags TEXT DEFAULT '',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-            """)
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_title ON notes(title);")
-
-            # 4. Reminders & Tasks table
-            cursor.execute("""
-            CREATE TABLE IF NOT EXISTS reminders (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                title TEXT NOT NULL,
-                description TEXT DEFAULT '',
-                due_time TEXT,
-                priority TEXT DEFAULT 'normal',
-                completed INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-            """)
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_reminders_completed ON reminders(completed);")
-
-            # 5. User settings table
-            cursor.execute("""
-            CREATE TABLE IF NOT EXISTS user_settings (
-                key TEXT PRIMARY KEY,
-                value TEXT NOT NULL,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-            """)
-            
+        # Configure SQLite for performance (WAL mode)
+        with self.engine.connect() as conn:
+            conn.execute(text("PRAGMA journal_mode=WAL;"))
+            conn.execute(text("PRAGMA foreign_keys=ON;"))
             conn.commit()
-            logger.info(f"Database initialized at {self.db_path}")
+
+        self.SessionLocal = sessionmaker(bind=self.engine, autoflush=False, autocommit=False)
+
+    def get_session(self) -> Session:
+        return self.SessionLocal()
 
     # --- Conversation Operations ---
     def save_message(self, session_id: str, role: str, content: str, model: str = "", tokens: int = 0) -> int:
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT INTO conversations (session_id, role, content, model, tokens) VALUES (?, ?, ?, ?, ?)",
-                (session_id, role, content, model, tokens)
-            )
-            conn.commit()
-            return cursor.lastrowid
+        with self.get_session() as session:
+            msg = Conversation(session_id=session_id, role=role, content=content, model=model, tokens=tokens)
+            session.add(msg)
+            session.commit()
+            session.refresh(msg)
+            return msg.id
 
     def get_conversation_history(self, session_id: str = "default", limit: int = 50) -> List[Dict[str, Any]]:
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT role, content, model, created_at FROM conversations WHERE session_id = ? ORDER BY id ASC LIMIT ?",
-                (session_id, limit)
-            )
-            rows = cursor.fetchall()
-            return [dict(row) for row in rows]
+        with self.get_session() as session:
+            history = session.query(Conversation)\
+                .filter(Conversation.session_id == session_id)\
+                .order_by(Conversation.id.asc())\
+                .limit(limit).all()
+            return [
+                {"role": m.role, "content": m.content, "model": m.model, "created_at": m.created_at}
+                for m in history
+            ]
 
     def clear_conversation(self, session_id: str = "default"):
-        with self.get_connection() as conn:
-            conn.execute("DELETE FROM conversations WHERE session_id = ?", (session_id,))
-            conn.commit()
+        with self.get_session() as session:
+            session.query(Conversation).filter(Conversation.session_id == session_id).delete()
+            session.commit()
 
     # --- Long-term Memory Operations ---
     def add_memory(self, key: str, value: str, category: str = "general") -> int:
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO memories (key, value, category, approved, updated_at) 
-                VALUES (?, ?, ?, 1, CURRENT_TIMESTAMP)
-                ON CONFLICT(key) DO UPDATE SET 
-                    value = excluded.value, 
-                    category = excluded.category,
-                    updated_at = CURRENT_TIMESTAMP
-            """, (key, value, category))
-            conn.commit()
-            return cursor.lastrowid
+        with self.get_session() as session:
+            memory = session.query(Memory).filter(Memory.key == key).first()
+            if memory:
+                memory.value = value
+                memory.category = category
+            else:
+                memory = Memory(key=key, value=value, category=category)
+                session.add(memory)
+            session.commit()
+            session.refresh(memory)
+            return memory.id
 
     def get_all_memories(self, approved_only: bool = True) -> List[Dict[str, Any]]:
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
+        with self.get_session() as session:
+            query = session.query(Memory)
             if approved_only:
-                cursor.execute("SELECT id, category, key, value, approved, created_at, updated_at FROM memories WHERE approved = 1 ORDER BY id DESC")
-            else:
-                cursor.execute("SELECT id, category, key, value, approved, created_at, updated_at FROM memories ORDER BY id DESC")
-            return [dict(row) for row in cursor.fetchall()]
+                query = query.filter(Memory.approved == True)
+            memories = query.order_by(Memory.id.desc()).all()
+            return [
+                {"id": m.id, "category": m.category, "key": m.key, "value": m.value,
+                 "approved": m.approved, "created_at": m.created_at, "updated_at": m.updated_at}
+                for m in memories
+            ]
 
     def delete_memory(self, memory_id: int) -> bool:
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
-            conn.commit()
-            return cursor.rowcount > 0
+        with self.get_session() as session:
+            memory = session.query(Memory).filter(Memory.id == memory_id).first()
+            if memory:
+                session.delete(memory)
+                session.commit()
+                return True
+            return False
 
     # --- Notes Operations ---
     def create_note(self, title: str, content: str, tags: str = "") -> int:
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT INTO notes (title, content, tags) VALUES (?, ?, ?)",
-                (title, content, tags)
-            )
-            conn.commit()
-            return cursor.lastrowid
+        with self.get_session() as session:
+            note = Note(title=title, content=content, tags=tags)
+            session.add(note)
+            session.commit()
+            session.refresh(note)
+            return note.id
 
     def get_notes(self, search: Optional[str] = None) -> List[Dict[str, Any]]:
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
+        with self.get_session() as session:
+            query = session.query(Note)
             if search:
-                query = f"%{search}%"
-                cursor.execute(
-                    "SELECT id, title, content, tags, created_at, updated_at FROM notes WHERE title LIKE ? OR content LIKE ? OR tags LIKE ? ORDER BY updated_at DESC",
-                    (query, query, query)
+                s_term = f"%{search}%"
+                query = query.filter(
+                    (Note.title.like(s_term)) |
+                    (Note.content.like(s_term)) |
+                    (Note.tags.like(s_term))
                 )
-            else:
-                cursor.execute("SELECT id, title, content, tags, created_at, updated_at FROM notes ORDER BY updated_at DESC")
-            return [dict(row) for row in cursor.fetchall()]
+            notes = query.order_by(Note.updated_at.desc()).all()
+            return [
+                {"id": n.id, "title": n.title, "content": n.content, "tags": n.tags,
+                 "created_at": n.created_at, "updated_at": n.updated_at}
+                for n in notes
+            ]
 
     def search_notes(self, query: str) -> List[Dict[str, Any]]:
         return self.get_notes(search=query)
@@ -185,57 +176,65 @@ class DatabaseManager:
     get_all_notes = get_notes
 
     def update_note(self, note_id: int, title: str, content: str, tags: str = "") -> bool:
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "UPDATE notes SET title = ?, content = ?, tags = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                (title, content, tags, note_id)
-            )
-            conn.commit()
-            return cursor.rowcount > 0
+        with self.get_session() as session:
+            note = session.query(Note).filter(Note.id == note_id).first()
+            if note:
+                note.title = title
+                note.content = content
+                note.tags = tags
+                session.commit()
+                return True
+            return False
 
     def delete_note(self, note_id: int) -> bool:
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM notes WHERE id = ?", (note_id,))
-            conn.commit()
-            return cursor.rowcount > 0
+        with self.get_session() as session:
+            note = session.query(Note).filter(Note.id == note_id).first()
+            if note:
+                session.delete(note)
+                session.commit()
+                return True
+            return False
 
     # --- Reminders Operations ---
     def create_reminder(self, title: str, due_time: str = "", priority: str = "normal", description: str = "") -> int:
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT INTO reminders (title, description, due_time, priority, completed) VALUES (?, ?, ?, ?, 0)",
-                (title, description, due_time, priority)
-            )
-            conn.commit()
-            return cursor.lastrowid
+        with self.get_session() as session:
+            rem = Reminder(title=title, description=description, due_time=due_time, priority=priority)
+            session.add(rem)
+            session.commit()
+            session.refresh(rem)
+            return rem.id
 
     def get_reminders(self, include_completed: bool = True) -> List[Dict[str, Any]]:
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            if include_completed:
-                cursor.execute("SELECT id, title, description, due_time, priority, completed, created_at FROM reminders ORDER BY completed ASC, id DESC")
-            else:
-                cursor.execute("SELECT id, title, description, due_time, priority, completed, created_at FROM reminders WHERE completed = 0 ORDER BY id DESC")
-            return [dict(row) for row in cursor.fetchall()]
+        with self.get_session() as session:
+            query = session.query(Reminder)
+            if not include_completed:
+                query = query.filter(Reminder.completed == False)
+            reminders = query.order_by(Reminder.completed.asc(), Reminder.id.desc()).all()
+            return [
+                {"id": r.id, "title": r.title, "description": r.description, "due_time": r.due_time,
+                 "priority": r.priority, "completed": r.completed, "created_at": r.created_at}
+                for r in reminders
+            ]
 
     get_all_reminders = get_reminders
 
     def toggle_reminder(self, reminder_id: int, completed: bool) -> bool:
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("UPDATE reminders SET completed = ? WHERE id = ?", (1 if completed else 0, reminder_id))
-            conn.commit()
-            return cursor.rowcount > 0
+        with self.get_session() as session:
+            rem = session.query(Reminder).filter(Reminder.id == reminder_id).first()
+            if rem:
+                rem.completed = completed
+                session.commit()
+                return True
+            return False
 
     def delete_reminder(self, reminder_id: int) -> bool:
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM reminders WHERE id = ?", (reminder_id,))
-            conn.commit()
-            return cursor.rowcount > 0
+        with self.get_session() as session:
+            rem = session.query(Reminder).filter(Reminder.id == reminder_id).first()
+            if rem:
+                session.delete(rem)
+                session.commit()
+                return True
+            return False
 
     # --- Wipe & Export Operations ---
     def export_all_data(self) -> Dict[str, Any]:
@@ -248,13 +247,12 @@ class DatabaseManager:
         }
 
     def wipe_all_data(self):
-        with self.get_connection() as conn:
-            conn.execute("DELETE FROM conversations;")
-            conn.execute("DELETE FROM memories;")
-            conn.execute("DELETE FROM notes;")
-            conn.execute("DELETE FROM reminders;")
-            conn.commit()
+        with self.get_session() as session:
+            session.query(Conversation).delete()
+            session.query(Memory).delete()
+            session.query(Note).delete()
+            session.query(Reminder).delete()
+            session.commit()
 
 # Global database manager instance
 db_manager = DatabaseManager()
-

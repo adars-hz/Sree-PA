@@ -22,3 +22,4 @@ if %ERRORLEVEL% EQU 0 (
     echo [!] Build encountered errors. Please check the output above.
 )
 pause
+

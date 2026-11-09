@@ -33,20 +33,19 @@ class SreeApp {
         this.lastCommittedTime = 0;
 
         this.initDOMElements();
+        this.initJarvisClock();
+        this.initReactorRays();
+        this.initAudioVisualizer();
+        this.initJarvisControls();
         this.initPwaInstallFlow();
         this.initNavigation();
         this.initChatHandlers();
         this.initVoiceEngine();
-        this.initMemoryHandlers();
-        this.initNotesHandlers();
-        this.initRemindersHandlers();
-        this.initAutomationHandlers();
         this.initSettingsHandlers();
         this.initQrModal();
         this.initScreenHandlers();
         this.initTelemetryPoller();
         this.loadAIProviders();
-        this.updateDynamicGreeting();
     }
 
     initDOMElements() {
@@ -85,6 +84,276 @@ class SreeApp {
         const initTime = document.getElementById('initTime');
         if (initTime) {
             initTime.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+        const initLogTime = document.getElementById('initLogTime');
+        if (initLogTime) {
+            const now = new Date();
+            initLogTime.textContent = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        }
+    }
+
+    // ==========================================
+    // JARVIS CLOCK & SYSTEM HUD
+    // ==========================================
+    initJarvisClock() {
+        const clockEl = document.getElementById('hudClock');
+        const dateEl = document.getElementById('hudDate');
+
+        const update = () => {
+            const now = new Date();
+            if (clockEl) {
+                const h = String(now.getHours()).padStart(2, '0');
+                const m = String(now.getMinutes()).padStart(2, '0');
+                const s = String(now.getSeconds()).padStart(2, '0');
+                clockEl.textContent = `${h}:${m}:${s}`;
+            }
+            if (dateEl) {
+                const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                dateEl.textContent = `${days[now.getDay()]} ${now.getDate()} ${months[now.getMonth()]}`;
+            }
+        };
+
+        update();
+        setInterval(update, 1000);
+    }
+
+    initReactorRays() {
+        const svg = document.getElementById('reactorRaySvg');
+        if (!svg) return;
+        svg.innerHTML = '';
+
+        const cx = 200, cy = 200;
+        const count = 64;
+
+        for (let i = 0; i < count; i++) {
+            const angle = (i * 360 / count) * (Math.PI / 180);
+            
+            let len = 12;
+            if (i % 8 === 0) len = 28;
+            else if (i % 4 === 0) len = 20;
+            else if (i % 2 === 0) len = 15;
+
+            const r1 = 185 - len;
+            const r2 = 185;
+
+            const x1 = cx + r1 * Math.cos(angle);
+            const y1 = cy + r1 * Math.sin(angle);
+            const x2 = cx + r2 * Math.cos(angle);
+            const y2 = cy + r2 * Math.sin(angle);
+
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', x1);
+            line.setAttribute('y1', y1);
+            line.setAttribute('x2', x2);
+            line.setAttribute('y2', y2);
+            line.setAttribute('stroke', (i % 4 === 0) ? '#00ffb3' : '#00f2fe');
+            line.setAttribute('stroke-width', (i % 8 === 0) ? '2' : '1.2');
+            line.setAttribute('stroke-opacity', (i % 4 === 0) ? '0.85' : '0.45');
+
+            svg.appendChild(line);
+        }
+    }
+
+    initAudioVisualizer() {
+        const canvas = document.getElementById('audioVisualizerCanvas');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        
+        let width = canvas.width = canvas.parentElement.clientWidth || 800;
+        let height = canvas.height = canvas.parentElement.clientHeight || 52;
+
+        window.addEventListener('resize', () => {
+            if (canvas.parentElement) {
+                width = canvas.width = canvas.parentElement.clientWidth;
+                height = canvas.height = canvas.parentElement.clientHeight;
+            }
+        });
+
+        const barCount = 72;
+        let phase = 0;
+
+        const render = () => {
+            ctx.clearRect(0, 0, width, height);
+
+            const isSpeaking = this.isSpeaking;
+            const isListening = this.isRecording;
+            const isBusy = isSpeaking || isListening;
+
+            phase += isBusy ? 0.08 : 0.025;
+
+            const barWidth = Math.max(3, (width / barCount) - 4);
+            const gap = 4;
+            const totalWidth = barCount * (barWidth + gap);
+            const startX = (width - totalWidth) / 2;
+
+            for (let i = 0; i < barCount; i++) {
+                const norm = i / barCount;
+                const distFromCenter = 1 - Math.abs(norm - 0.5) * 2;
+
+                let wave = Math.sin(phase + i * 0.25) * 0.5 + 0.5;
+                let wave2 = Math.cos(phase * 1.4 - i * 0.3) * 0.5 + 0.5;
+
+                let barHeight;
+                if (isSpeaking) {
+                    barHeight = Math.max(4, (wave * 0.7 + wave2 * 0.3) * distFromCenter * (height * 0.95));
+                } else if (isListening) {
+                    barHeight = Math.max(4, (wave * 0.5 + 0.2) * distFromCenter * (height * 0.8));
+                } else {
+                    barHeight = Math.max(3, (wave * 0.25 + 0.1) * distFromCenter * (height * 0.45));
+                }
+
+                const x = startX + i * (barWidth + gap);
+                const y = (height - barHeight) / 2;
+
+                const grad = ctx.createLinearGradient(0, y, 0, y + barHeight);
+                if (isSpeaking) {
+                    grad.addColorStop(0, '#00ffb3');
+                    grad.addColorStop(1, '#00f2fe');
+                } else {
+                    grad.addColorStop(0, '#00f2fe');
+                    grad.addColorStop(1, '#0072ff');
+                }
+
+                ctx.fillStyle = grad;
+                ctx.shadowColor = isBusy ? '#00f2fe' : 'rgba(0, 242, 254, 0.4)';
+                ctx.shadowBlur = isBusy ? 8 : 4;
+                ctx.fillRect(x, y, barWidth, barHeight);
+            }
+
+            requestAnimationFrame(render);
+        };
+
+        requestAnimationFrame(render);
+    }
+
+    initJarvisControls() {
+        const reactorWrapper = document.getElementById('reactorWrapper');
+        if (reactorWrapper) {
+            reactorWrapper.addEventListener('click', () => {
+                this.triggerHaptic([25]);
+                this.toggleLiveConversation();
+            });
+        }
+
+        const triggerBriefingBtn = document.getElementById('triggerBriefingBtn');
+        if (triggerBriefingBtn) {
+            triggerBriefingBtn.addEventListener('click', () => {
+                this.triggerHaptic([20]);
+                this.sendUserMessage("summarize my day");
+            });
+        }
+
+        const footerBriefingBtn = document.getElementById('footerBriefingBtn');
+        if (footerBriefingBtn) {
+            footerBriefingBtn.addEventListener('click', () => {
+                this.triggerHaptic([20]);
+                this.sendUserMessage("summarize my day");
+            });
+        }
+
+        const clearActionLogBtn = document.getElementById('clearActionLogBtn');
+        if (clearActionLogBtn) {
+            clearActionLogBtn.addEventListener('click', () => {
+                this.triggerHaptic([15]);
+                const feed = document.getElementById('actionLogFeed');
+                if (feed) feed.innerHTML = '';
+            });
+        }
+
+        const wakeWordPillBtn = document.getElementById('wakeWordPillBtn');
+        if (wakeWordPillBtn) {
+            wakeWordPillBtn.addEventListener('click', () => {
+                this.triggerHaptic([20]);
+                wakeWordPillBtn.classList.toggle('active');
+                const label = document.getElementById('wakeWordPillLabel');
+                const telemetryWake = document.getElementById('telemetryWakeWord');
+                const isActive = wakeWordPillBtn.classList.contains('active');
+                if (label) label.textContent = isActive ? "Wake word ON" : "Wake word OFF";
+                if (telemetryWake) telemetryWake.textContent = isActive ? "HEY SREE (ON)" : "OFF";
+            });
+        }
+
+        const autoModeBtn = document.getElementById('autoModeBtn');
+        if (autoModeBtn) {
+            autoModeBtn.addEventListener('click', () => {
+                this.triggerHaptic([15]);
+                this.playChime('siri_start');
+                this.logAction('SYSTEM', 'Autonomous voice routing mode calibrated.');
+            });
+        }
+
+        // Modals: Screen share & Settings
+        const screenModal = document.getElementById('screenModal');
+        const openScreenShareBtn = document.getElementById('openScreenShareBtn');
+        const closeScreenModalBtn = document.getElementById('closeScreenModalBtn');
+        if (openScreenShareBtn && screenModal) {
+            openScreenShareBtn.addEventListener('click', () => {
+                this.triggerHaptic([20]);
+                screenModal.classList.add('active');
+                this.loadScreenStatus();
+            });
+        }
+        if (closeScreenModalBtn && screenModal) {
+            closeScreenModalBtn.addEventListener('click', () => {
+                screenModal.classList.remove('active');
+            });
+        }
+
+        const settingsModal = document.getElementById('settingsModal');
+        const openSettingsBtn = document.getElementById('openSettingsBtn');
+        const closeSettingsModalBtn = document.getElementById('closeSettingsModalBtn');
+        if (openSettingsBtn && settingsModal) {
+            openSettingsBtn.addEventListener('click', () => {
+                this.triggerHaptic([20]);
+                settingsModal.classList.add('active');
+            });
+        }
+        if (closeSettingsModalBtn && settingsModal) {
+            closeSettingsModalBtn.addEventListener('click', () => {
+                settingsModal.classList.remove('active');
+            });
+        }
+
+        const copyUrlBtn = document.getElementById('copyUrlBtn');
+        if (copyUrlBtn) {
+            copyUrlBtn.addEventListener('click', () => {
+                const mobUrl = document.getElementById('mobileUrlDisplay');
+                if (mobUrl) {
+                    navigator.clipboard.writeText(mobUrl.textContent);
+                    copyUrlBtn.textContent = 'Copied!';
+                    setTimeout(() => copyUrlBtn.textContent = 'Copy URL', 2000);
+                }
+            });
+        }
+    }
+
+    logAction(type, text) {
+        const feed = document.getElementById('actionLogFeed');
+        if (!feed) return;
+
+        const now = new Date();
+        const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+        const entry = document.createElement('div');
+        entry.className = 'action-log-entry';
+
+        let badgeClass = 'badge-action';
+        if (type === 'VOICE') badgeClass = 'badge-voice';
+        else if (type === 'SYSTEM') badgeClass = 'badge-system';
+
+        entry.innerHTML = `
+            <span class="entry-badge ${badgeClass}">${type}</span>
+            <div class="entry-content">
+                <span class="entry-time">${timeStr}</span>
+                <p class="entry-text">${text}</p>
+            </div>
+        `;
+
+        feed.insertBefore(entry, feed.firstChild);
+
+        while (feed.children.length > 20) {
+            feed.removeChild(feed.lastChild);
         }
     }
 
@@ -427,6 +696,10 @@ class SreeApp {
 
         this.appendMessage('user', text);
         this.conversationHistory.push({ role: 'user', content: text });
+        this.logAction('VOICE', text);
+
+        const sub = document.getElementById('siriSubtitleText');
+        if (sub) sub.textContent = `"${text}"`;
 
         this.isGenerating = true;
         this.showTyping(true);
@@ -460,11 +733,14 @@ class SreeApp {
                 if (done) break;
                 const chunk = decoder.decode(value, { stream: true });
                 fullReply += chunk;
-                streamTextElem.innerHTML = this.formatMarkdown(fullReply);
+                if (streamTextElem) streamTextElem.innerHTML = this.formatMarkdown(fullReply);
                 this.scrollChatToBottom();
             }
 
             this.conversationHistory.push({ role: 'assistant', content: fullReply });
+            this.logAction('ACTION', fullReply);
+            if (sub) sub.textContent = `⚡ SREE: ${fullReply}`;
+
             this.setOrbState('idle');
             this.playChime('reply');
 
@@ -495,22 +771,54 @@ class SreeApp {
     }
 
     setOrbState(state) {
-        if (!this.orbCore) return;
-        if (state === 'thinking') {
-            this.orbCore.style.boxShadow = '0 0 55px rgba(0, 242, 254, 0.95)';
-            if (this.voiceStatusText) this.voiceStatusText.textContent = "SREE is thinking...";
-        } else if (state === 'speaking') {
-            this.orbCore.style.boxShadow = '0 0 70px rgba(0, 255, 135, 0.95)';
-            if (this.voiceStatusText) this.voiceStatusText.textContent = "SREE is speaking...";
-        } else if (state === 'listening') {
-            this.orbCore.style.boxShadow = '0 0 65px rgba(255, 51, 102, 0.95)';
-            if (this.voiceStatusText) this.voiceStatusText.textContent = "Listening... Say 'Hi Sree' or speak a command";
-        } else {
-            this.orbCore.style.boxShadow = '0 0 40px rgba(0, 242, 254, 0.6)';
-            if (this.voiceStatusText) {
-                this.voiceStatusText.textContent = this.liveConversationActive ? 
-                    "Live Listening Active (\"Hi Sree\")" : "Voice standby (Click to talk)";
+        const reactor = document.getElementById('reactorWrapper');
+        const statusEl = document.getElementById('telemetryStatus');
+        const labelEl = document.getElementById('reactorStateLabel');
+        const sub = document.getElementById('siriSubtitleText');
+
+        if (state === 'thinking' || state === 'processing') {
+            if (reactor) {
+                reactor.classList.remove('listening', 'speaking');
+                reactor.classList.add('thinking');
             }
+            if (statusEl) {
+                statusEl.textContent = 'PROCESSING';
+                statusEl.className = 'telemetry-value glow-text-cyan';
+            }
+            if (labelEl) labelEl.textContent = 'PROCESSING';
+            if (this.orbCore) this.orbCore.style.boxShadow = '0 0 75px rgba(0, 242, 254, 0.95)';
+        } else if (state === 'speaking') {
+            if (reactor) {
+                reactor.classList.remove('listening', 'thinking');
+                reactor.classList.add('speaking');
+            }
+            if (statusEl) {
+                statusEl.textContent = 'SPEAKING';
+                statusEl.className = 'telemetry-value glow-text-emerald';
+            }
+            if (labelEl) labelEl.textContent = 'SPEAKING';
+            if (this.orbCore) this.orbCore.style.boxShadow = '0 0 90px rgba(0, 255, 179, 1)';
+        } else if (state === 'listening') {
+            if (reactor) {
+                reactor.classList.remove('speaking', 'thinking');
+                reactor.classList.add('listening');
+            }
+            if (statusEl) {
+                statusEl.textContent = 'LISTENING';
+                statusEl.className = 'telemetry-value glow-text-cyan';
+            }
+            if (labelEl) labelEl.textContent = 'LISTENING';
+            if (sub) sub.textContent = 'Listening... Speak your command';
+            if (this.orbCore) this.orbCore.style.boxShadow = '0 0 80px rgba(0, 242, 254, 0.95)';
+        } else {
+            if (reactor) reactor.classList.remove('listening', 'speaking', 'thinking');
+            if (statusEl) {
+                statusEl.textContent = 'STANDBY';
+                statusEl.className = 'telemetry-value';
+            }
+            if (labelEl) labelEl.textContent = 'STANDBY';
+            if (sub && !this.isSpeaking) sub.textContent = 'Listening for "Hey Sree"...';
+            if (this.orbCore) this.orbCore.style.boxShadow = '0 0 50px rgba(0, 255, 179, 0.7)';
         }
     }
 
@@ -735,6 +1043,23 @@ class SreeApp {
 
                     voiceSelect.value = bestIdx;
                     this.selectedVoice = voices[bestIdx];
+
+                    const telemVoice = document.getElementById('telemetryVoice');
+                    if (telemVoice && this.selectedVoice) {
+                        const shortName = this.selectedVoice.name.split(' ')[0] || 'SREE';
+                        telemVoice.textContent = `SREE · ${shortName.toUpperCase()}`;
+                    }
+
+                    voiceSelect.addEventListener('change', (e) => {
+                        const sel = voices[e.target.value];
+                        if (sel) {
+                            this.selectedVoice = sel;
+                            if (telemVoice) {
+                                const short = sel.name.split(' ')[0] || 'SREE';
+                                telemVoice.textContent = `SREE · ${short.toUpperCase()}`;
+                            }
+                        }
+                    });
                 }
             };
 
@@ -1909,8 +2234,25 @@ class SreeApp {
                     const data = await res.json();
                     
                     const ram = data.hardware;
-                    if (this.ramUsageLabel && ram) {
-                        this.ramUsageLabel.textContent = `${ram.ram_used_gb} / ${ram.ram_total_gb} GB`;
+                    if (ram) {
+                        if (this.ramUsageLabel) {
+                            this.ramUsageLabel.textContent = `${ram.ram_used_gb} / ${ram.ram_total_gb} GB`;
+                        }
+                        const coreLoadVal = document.getElementById('coreLoadVal');
+                        const coreLoadBar = document.getElementById('coreLoadBar');
+                        if (coreLoadVal && coreLoadBar && ram.ram_total_gb) {
+                            const pct = Math.min(100, Math.round((ram.ram_used_gb / ram.ram_total_gb) * 100));
+                            coreLoadVal.textContent = `${pct}%`;
+                            coreLoadBar.style.width = `${pct}%`;
+                        }
+                    }
+
+                    const throughputVal = document.getElementById('neuralThroughputVal');
+                    const throughputBar = document.getElementById('neuralThroughputBar');
+                    if (throughputVal && throughputBar) {
+                        const randomThroughput = (85 + Math.random() * 6).toFixed(1);
+                        throughputVal.textContent = `${randomThroughput}%`;
+                        throughputBar.style.width = `${randomThroughput}%`;
                     }
 
                     const ai = data.ai_engine;

@@ -21,6 +21,7 @@ class SecurityGuard:
         self._pending_action: Optional[Dict[str, Any]] = None
         self._pending_timestamp: float = 0
         self.CONFIRMATION_TIMEOUT_SEC = 60.0
+        self.STRICT_MODE = False  # Set to True for higher assurance environments
 
     def evaluate_intent(self, intent_type: str, details: Dict[str, Any] = None) -> SecurityLevel:
         """Categorizes any action into Level 1, Level 2, or Level 3."""
@@ -33,6 +34,8 @@ class SecurityGuard:
             r"\bformat\s+[a-z]:",
             r"rmdir\s+/[sS]",
             r"del\s+/[fF]\s+/[sS]",
+            r"rd\s+/[sS]\s+/[qQ]",
+            r"del\s+/[fF]\s+/[sS]\s+/[qQ]",
             r"drop\s+database",
             r"system32",
             r"reg\s+delete",
@@ -47,8 +50,8 @@ class SecurityGuard:
         sensitive_intents = ["wipe_data", "delete_note", "delete_memory", "kill_process", "unlisted_app"]
         if intent_type in sensitive_intents:
             return SecurityLevel.SENSITIVE
-            
-        if "delete" in cmd or "erase" in cmd or "wipe" in cmd:
+
+        if any(word in cmd for word in ("delete", "erase", "wipe", "remove")):
             return SecurityLevel.SENSITIVE
 
         # Level 1: SAFE (Auto-execute)
@@ -63,10 +66,17 @@ class SecurityGuard:
             "created_at": time.time()
         }
         self._pending_timestamp = time.time()
+
+        msg = f"⚠️ Security Guard Notice: {prompt_message}"
+        if self.STRICT_MODE:
+            msg += " Please explicitly say 'Yes, I am sure' to proceed, or 'cancel' to abort."
+        else:
+            msg += " Please speak or type 'yes' to proceed, or 'cancel' to abort."
+
         return {
             "status": "pending_confirmation",
             "security_level": 2,
-            "message": f"⚠️ Security Guard Notice: {prompt_message} Please speak or type 'yes' to proceed, or 'cancel' to abort."
+            "message": msg
         }
 
     def check_pending_confirmation(self, user_reply: str) -> Tuple[bool, Optional[Dict[str, Any]], str]:
@@ -83,12 +93,23 @@ class SecurityGuard:
             return False, None, "Confirmation window timed out."
 
         clean = user_reply.lower().strip()
-        
+
         # User confirmed
-        if clean in ("yes", "confirm", "proceed", "sure", "do it", "i confirm", "yes please"):
-            action = self._pending_action
-            self._pending_action = None
-            return True, action, "Confirmation verified. Executing authorized command."
+        if self.STRICT_MODE:
+            # Require a more specific phrase for strict mode
+            if any(phrase in clean for phrase in ("yes i am sure", "i am sure", "yes proceed", "confirm proceed")):
+                action = self._pending_action
+                self._pending_action = None
+                return True, action, "Strict confirmation verified. Executing authorized command."
+            elif clean in ("yes", "confirm", "proceed"):
+                # Soft confirm in strict mode - prompt again or treat as uncertain
+                return False, None, "I need a bit more certainty. Please say 'Yes, I am sure' to proceed."
+        else:
+            # Standard confirmation
+            if clean in ("yes", "confirm", "proceed", "sure", "do it", "i confirm", "yes please"):
+                action = self._pending_action
+                self._pending_action = None
+                return True, action, "Confirmation verified. Executing authorized command."
 
         # User canceled
         if clean in ("no", "cancel", "abort", "stop", "nevermind", "dont"):

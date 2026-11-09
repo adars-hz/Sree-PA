@@ -18,7 +18,9 @@ import multiprocessing
 # Freeze support for Windows PyInstaller
 multiprocessing.freeze_support()
 
-PORT = 8005
+from backend.app.core.config import settings
+
+PORT = settings.PORT
 URL = f"http://127.0.0.1:{PORT}"
 
 def is_service_ready(url: str) -> bool:
@@ -47,13 +49,13 @@ def start_backend_in_thread():
     try:
         import uvicorn
         from backend.app.main import app
-        
+
         config = uvicorn.Config(app=app, host="0.0.0.0", port=PORT, log_level="warning")
         server = uvicorn.Server(config)
-        
+
         thread = threading.Thread(target=server.run, daemon=True)
         thread.start()
-        
+
         # Wait up to 10 seconds for backend to become healthy
         for _ in range(20):
             if is_service_ready(URL):
@@ -87,16 +89,16 @@ def ensure_background_listener():
         candidates.append(meipass / "scripts" / "background_listener.ps1")
         appdata = Path(os.environ.get("APPDATA", str(Path.home()))) / "SREE" / "scripts" / "background_listener.ps1"
         candidates.append(appdata)
-    
+
     root_dir = Path(__file__).resolve().parent
     candidates.append(root_dir / "scripts" / "background_listener.ps1")
-    
+
     ps_script = None
     for c in candidates:
         if c.exists():
             ps_script = c
             break
-            
+
     if ps_script:
         print(f"[*] Activating silent background voice listener ({ps_script.name})...")
         try:
@@ -119,7 +121,7 @@ def launch_app_window():
         os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
         r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe"
     ]
-    
+
     for exe in browser_paths:
         if os.path.exists(exe):
             print(f"[*] Opening SREE Application Window via {Path(exe).name}...")
@@ -128,7 +130,7 @@ def launch_app_window():
                 f"--app={URL}",
                 "--window-size=1280,840"
             ])
-            
+
     # Generic browser fallback
     import webbrowser
     print("[*] Opening SREE in default browser...")
@@ -139,19 +141,19 @@ def main():
     print("=" * 60)
     print("        SREE – PERSONAL DIGITAL AI ASSISTANT")
     print("=" * 60)
-    
+
     ensure_ollama()
     start_backend_in_thread()
     ensure_background_listener()
-    
+
     win_proc = launch_app_window()
-    
+
     print("\n[+] SREE is actively running!")
     print(f"    Local Web App: {URL}")
     print("    Background Voice: Listening for 'Hey Sree'")
     print("    Press Ctrl+C in this console or close the app window to exit.")
     print("=" * 60)
-    
+
     try:
         if win_proc:
             win_proc.wait()

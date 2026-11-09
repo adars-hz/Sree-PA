@@ -9,22 +9,24 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from .core.config import settings
+from .core.logger import logger
 from .api.router import api_router
 from .ai.ollama_client import ollama_client
+from .security.auth import SREEAuthMiddleware
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup actions
-    print(f"\n=======================================================")
-    print(f"  [+] Starting SREE Personal AI Assistant")
-    print(f"  [+] Engine Host: {settings.HOST}:{settings.PORT}")
-    print(f"  [+] Ollama Endpoint: {settings.OLLAMA_BASE_URL}")
-    print(f"  [+] Default Model: {settings.DEFAULT_MODEL}")
-    print(f"=======================================================\n")
+    logger.info("=======================================================")
+    logger.info("  [+] Starting SREE Personal AI Assistant")
+    logger.info(f"  [+] Engine Host: {settings.HOST}:{settings.PORT}")
+    logger.info(f"  [+] Ollama Endpoint: {settings.OLLAMA_BASE_URL}")
+    logger.info(f"  [+] Default Model: {settings.DEFAULT_MODEL}")
+    logger.info("=======================================================")
     yield
     # Shutdown actions
     await ollama_client.close()
-    print("  [-] SREE Backend stopped.")
+    logger.info("  [-] SREE Backend stopped.")
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -41,6 +43,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add SREE Authentication Middleware for LAN Security
+app.add_middleware(SREEAuthMiddleware)
 
 # Health check route
 @app.get("/health")
