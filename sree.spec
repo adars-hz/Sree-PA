@@ -11,9 +11,19 @@ datas = [
     (str(root_dir / 'frontend'), 'frontend'),
     (str(root_dir / 'scripts'), 'scripts'),
     (str(root_dir / '.env.example'), '.'),
+    (str(root_dir / 'sree.ico'), '.'),
+    (str(root_dir / 'sree_tray.png'), '.'),
 ]
 
 hidden_imports = [
+    'pystray',
+    'pystray._win32',
+    'pystray._util',
+    'pystray._util.win32',
+    'PIL',
+    'PIL.Image',
+    'PIL.ImageDraw',
+    'PIL.IcoImagePlugin',
     'uvicorn',
     'uvicorn.logging',
     'uvicorn.loops',
@@ -41,9 +51,6 @@ hidden_imports = [
     'scipy',
     'scipy.signal',
     'scipy.io.wavfile',
-    'PIL',
-    'PIL.Image',
-    'PIL.ImageDraw',
     'sqlite3',
     'backend.app.main',
     'backend.app.api.router',
@@ -101,7 +108,7 @@ exe = EXE(
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=True, # Allows users to see SREE status and server logs
+    console=False, # Pure native desktop window, no black command prompt
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
@@ -109,4 +116,3 @@ exe = EXE(
     entitlements_file=None,
     icon='sree.ico',
 )
-
