@@ -166,6 +166,27 @@ body.jarvis-theme {
 
 .system-brand {
     display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+}
+
+.brand-logo-img {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(0, 242, 254, 0.45);
+    box-shadow: 0 0 16px rgba(0, 242, 254, 0.5), inset 0 0 10px rgba(0, 255, 179, 0.3);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.brand-logo-img:hover {
+    transform: scale(1.08);
+    box-shadow: 0 0 24px rgba(0, 255, 179, 0.8);
+}
+
+.brand-text-col {
+    display: flex;
     flex-direction: column;
 }
 
