@@ -154,6 +154,67 @@ class TestVoiceDesktopCommands(unittest.TestCase):
         reply3 = asyncio.run(skill_crystallizer.execute_fast_path("Hey Sree, click"))
         self.assertEqual(reply3, "Clicked.")
 
+class TestMultiMonitorControl(unittest.TestCase):
+    def test_20_monitor_enumeration(self):
+        monitors = desktop_control.get_monitors()
+        self.assertIsInstance(monitors, list)
+        self.assertGreater(len(monitors), 0)
+        first = monitors[0]
+        self.assertIn("index", first)
+        self.assertIn("name", first)
+        self.assertIn("width", first)
+        self.assertIn("height", first)
+        self.assertIn("is_primary", first)
+        self.assertGreater(first["width"], 0)
+        self.assertGreater(first["height"], 0)
+
+    def test_21_virtual_screen_geometry(self):
+        geom = desktop_control.get_virtual_screen_geometry()
+        self.assertIn("left", geom)
+        self.assertIn("top", geom)
+        self.assertIn("width", geom)
+        self.assertIn("height", geom)
+        self.assertGreaterEqual(geom["width"], desktop_control.screen_width)
+        self.assertGreaterEqual(geom["height"], desktop_control.screen_height)
+
+    def test_22_active_monitor_selection(self):
+        res = desktop_control.set_active_monitor(0)
+        self.assertTrue(res["success"])
+        self.assertEqual(res["active_monitor_index"], 0)
+        active = desktop_control.get_active_monitor()
+        self.assertEqual(active["index"], 0)
+
+        # Invalid index test
+        bad_res = desktop_control.set_active_monitor(999)
+        self.assertFalse(bad_res["success"])
+
+    def test_23_coordinate_normalization_ratios(self):
+        mon = desktop_control.get_active_monitor()
+        # 50% X and 50% Y should be exactly in the center of the monitor
+        norm_x, norm_y = desktop_control.normalize_coordinates(
+            x_ratio=0.5, y_ratio=0.5, monitor_index=mon["index"]
+        )
+        expected_x = int(mon["left"] + (0.5 * mon["width"]))
+        expected_y = int(mon["top"] + (0.5 * mon["height"]))
+        self.assertEqual(norm_x, expected_x)
+        self.assertEqual(norm_y, expected_y)
+
+    def test_24_coordinate_normalization_clamping(self):
+        mon = desktop_control.get_active_monitor()
+        # Out-of-bounds ratios should clamp to monitor edges
+        clamped_x, clamped_y = desktop_control.normalize_coordinates(
+            x_ratio=1.5, y_ratio=-0.5, monitor_index=mon["index"]
+        )
+        self.assertEqual(clamped_x, mon["right"] - 1)
+        self.assertEqual(clamped_y, mon["top"])
+
+    def test_25_multi_monitor_mouse_dispatch(self):
+        with patch("pyautogui.moveTo") as mock_move, patch("pyautogui.click") as mock_click:
+            res = desktop_control.click(x_ratio=0.5, y_ratio=0.5, monitor_index=0, button="left")
+            self.assertTrue(res["success"])
+            self.assertEqual(res["action"], "left_click")
+            mock_click.assert_called_once_with(button="left", clicks=1)
+
 if __name__ == "__main__":
     unittest.main()
 

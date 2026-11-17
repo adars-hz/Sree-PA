@@ -132,15 +132,17 @@ This document tracks all identified bugs, resolved issues, feature proposals, an
 ---
 
 ### #ISSUE-11: Multi-Monitor Desktop Control & Screen Coordinate Normalization
-- **Type**: ✨ Feature Request
+- **Type**: ✨ Feature Request (Closes GitHub Issue #5)
 - **Priority**: Medium
-- **Status**: 🟡 [OPEN / IN BACKLOG]
-- **Component**: `backend/app/automation/desktop_control.py`, `backend/app/automation/screen_share.py`
-- **Description**: When multiple monitors are connected, PyAutoGUI actions default to the primary monitor or fail to map coordinates on secondary displays with different DPI scaling.
-- **Proposed Solution**:
-  - Add monitor enumeration endpoint `/api/desktop/monitors`.
-  - Support selecting active target monitor for screen streaming and clicking.
-  - Implement DPI-aware coordinate scaling.
+- **Status**: 🟢 [RESOLVED]
+- **Component**: `backend/app/automation/desktop_control.py`, `backend/app/api/desktop.py`, `frontend/`
+- **Description**: When multiple monitors are connected, PyAutoGUI actions defaulted to the primary monitor and failed to map coordinates on secondary displays with different DPI scaling.
+- **Resolution**:
+  - Implemented Win32 `EnumDisplayMonitors` monitor enumeration via `ctypes`.
+  - Added endpoints `/api/desktop/monitors` and `/api/desktop/monitors/select`.
+  - Implemented DPI-aware coordinate normalization supporting `x_ratio` and `y_ratio` (0.0 to 1.0) and monitor index offsets.
+  - Added Monitor selector in the frontend HUD desktop viewer with responsive click coordinate normalization.
+- **Tests Added**: 6 new unit tests in `tests/test_desktop_screen_suite.py` (`test_20` to `test_25`). All 25 desktop tests pass.
 
 ---
 

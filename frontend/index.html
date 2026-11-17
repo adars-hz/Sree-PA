@@ -245,11 +245,17 @@
                 <h3 class="modal-title">🖥️ Desktop Screen Sharing & Remote Access</h3>
                 <button class="modal-close-btn" id="closeScreenModalBtn">&times;</button>
             </div>
-            <div class="screen-controls-bar" style="display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap;">
+            <div class="screen-controls-bar" style="display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; align-items: center;">
                 <button class="hud-btn-primary" id="startScreenBroadcastBtn">📡 Broadcast Screen</button>
                 <button class="hud-btn-outline" id="refreshScreenSnapshotBtn">🔄 Refresh</button>
                 <button class="hud-btn-outline" id="takeScreenshotDiskBtn">📸 Save Screenshot</button>
                 <button class="hud-btn-outline" id="toggleLiveStreamModeBtn">▶️ Live MJPEG Stream</button>
+                <div class="hud-monitor-select-wrap" style="display: flex; align-items: center; gap: 6px;">
+                    <span style="font-size: 0.75rem; color: var(--cyan-glow); letter-spacing: 0.5px;">MONITOR:</span>
+                    <select id="desktopMonitorSelect" class="hud-select-transparent" title="Select Display Monitor">
+                        <option value="0">DISPLAY1 (Primary)</option>
+                    </select>
+                </div>
                 <span id="screenActionFeedback" style="font-size: 0.85rem; color: #00f2fe; margin-left: auto;"></span>
             </div>
             <div class="screen-viewer-box">

@@ -1,93 +1,88 @@
-# Pull Request: Core Stability Fixes, Interactive HUD Command Input, CI Workflow & Community Backlog
+# Pull Request: Multi-Monitor Desktop Control & Screen Coordinate Normalization
 
 **Target Repository**: `adars-hz/Sree-PA`  
 **Base Branch**: `main`  
-**Head Branch**: `contribution/features-fixes-and-issues`  
+**Head Branch**: `PRN-6:feature/multi-monitor-desktop-control`  
+**Closes**: #5  
 **Author**: PRN-6  
 
 ---
 
 ## 📌 Title
 ```
-feat: core stability bugfixes, interactive HUD command input, CI pipeline, issues catalog & contributor guide
+feat: multi-monitor enumeration, coordinate normalization & display selector (closes #5)
 ```
 
 ---
 
 ## 📖 Description & Summary
 
-This pull request provides comprehensive stability improvements, resolves critical startup and testing bugs on clean checkouts, introduces an interactive HUD command bar for keyboard/non-voice users, adds automated continuous integration, and establishes a standardized contribution and issue-tracking framework.
+This pull request resolves **GitHub Issue #5**: *Multi-Monitor Desktop Control & Screen Coordinate Normalization*.
+
+Previously, PyAutoGUI actions were restricted to the primary screen dimensions (`self.screen_width`), which clamped cursor movement to display 1 and made it impossible to control apps on secondary or tertiary monitors. Furthermore, fixed pixel coordinates failed across displays with varying DPI scaling or when interacting via the remote PWA screen viewer.
 
 ---
 
 ## 🛠️ Key Changes & Problem Resolutions
 
-### 1. 🐛 Database Auto-Bootstrap on Clean Install (`backend/app/database/db.py`)
-- **Problem**: When cloning on a machine without a pre-existing `sree.db` database, tables (`conversations`, `memories`, `notes`, `reminders`, `user_settings`) were never created because `Base.metadata.create_all(bind=self.engine)` was missing. This resulted in `sqlite3.OperationalError: no such table: memories` and failed 14 unit tests.
-- **Solution**: Added `Base.metadata.create_all(bind=self.engine)` in `DatabaseManager.__init__` for self-bootstrapping database initialization.
-- **Verification**: Added `test_88_fresh_db_auto_bootstrap` to confirm tables bootstrap cleanly in new temp databases.
+### 1. 🖥️ Native Monitor Enumeration (`backend/app/automation/desktop_control.py`)
+- Implemented native display enumeration via Win32 `EnumDisplayMonitors` using Python's standard `ctypes` library (zero extra external dependencies).
+- Detects each display's device name, resolution, `(left, top, right, bottom)` bounding box coordinates, and primary monitor status.
+- Added graceful cross-platform fallback for headless or non-Windows environments.
 
-### 2. 📦 Core Dependencies Completion (`requirements.txt`)
-- **Problem**: Core modules imported `pyautogui`, `pillow`, `qrcode`, `beautifulsoup4`, `numpy`, `scipy`, and `pystray`, but these were missing from `requirements.txt`. Running `pip install -r requirements.txt` resulted in broken imports.
-- **Solution**: Added all required dependencies with version constraints and structured category headers.
+### 2. 📐 Virtual Multi-Monitor Geometry & Active Monitor Selection
+- Added `get_virtual_screen_geometry()` to calculate the global multi-monitor bounding box spanning all connected displays.
+- Added `set_active_monitor(monitor_index)` and `get_active_monitor()` to dynamically select the target display for screen viewing and automation.
 
-### 3. 🖥️ Headless / Display Safety Fallbacks (`desktop_control.py` & `system.py`)
-- **Problem**: Direct top-level imports of `pyautogui` and `qrcode` crashed the backend when running in headless environments, CI containers, or systems without a display server.
-- **Solution**:
-  - Wrapped `pyautogui` in `backend/app/automation/desktop_control.py` with safe try-except guards and fallback resolution `(1920, 1080)`.
-  - Wrapped `qrcode` in `backend/app/api/system.py` with availability checks, returning a descriptive 503 HTTP response on `/api/system/qrcode` rather than crashing backend module loading.
+### 3. 🎯 DPI-Aware Coordinate Normalization
+- Added `normalize_coordinates(x, y, x_ratio, y_ratio, monitor_index)`:
+  - **Ratio-Based Normalization**: Normalizes relative ratios `(0.0 to 1.0)` to target display coordinates, allowing responsive touchscreen and web UI clicks to map with 100% precision regardless of DPI scaling or client viewport zoom.
+  - **Monitor Offsets**: Offsets relative `(x, y)` pixels by target monitor `(left, top)` coordinates.
+  - **Virtual Boundary Clamping**: Prevents cursor clamping to monitor 1 by clamping across the complete virtual multi-monitor desktop.
+- Updated `move_mouse`, `click`, `double_click`, `right_click`, and `drag_to` to accept `x_ratio`, `y_ratio`, `monitor_index`, and `normalized`.
 
-### 4. 🧪 Desktop Automation Test Suite Execution (`tests/test_desktop_screen_suite.py`)
-- **Problem**: Running `python tests/test_desktop_screen_suite.py` directly failed with `ModuleNotFoundError: No module named 'backend'` due to missing `sys.path` injection.
-- **Solution**: Added `sys.path.insert(0, str(PROJECT_ROOT))` and a `unittest.main()` block. All 19 tests now pass directly and in test discovery.
+### 4. 🌐 REST API Endpoints (`backend/app/api/desktop.py`)
+- `GET /api/desktop/monitors`: Returns all connected monitors, active display, and virtual screen geometry.
+- `POST /api/desktop/monitors/select`: Switches active display monitor.
+- Updated `GET /api/desktop/status` to include monitor telemetry.
+- Updated `POST /api/desktop/mouse` with `x_ratio`, `y_ratio`, `monitor_index`, and `normalized` flags.
 
-### 5. 🔒 Security Guard Data Wipe Pipeline (`backend/app/api/chat.py`)
-- **Problem**: When confirming the sensitive `wipe_data` action ("Permanently erase all personal memories, notes, and conversation records..."), the handler only cleared conversations, leaving memories and notes intact.
-- **Solution**: Updated handler to execute `db_manager.wipe_all_data()`. Added unit test `test_90_wipe_data_security_full_reset`.
-
-### 6. ✨ Interactive HUD Command Input Bar (`frontend/index.html`, `style.css`, `app.js`)
-- **Problem**: The HUD cockpit only supported speech input (text input elements were hidden with `display: none`), making interaction impossible in quiet environments (offices, libraries) or on laptops without microphones.
-- **Solution**:
-  - Designed and added a sleek cybernetic command bar with prompt icon, input box, send button (`➤`), and mic toggle (`🎙️`).
-  - Added global keyboard shortcut: pressing `/` instantly focuses the command bar.
-  - Commands seamlessly execute via fast paths or `/api/chat` and update the Briefing & Action Log.
-
-### 7. 📑 Issues Catalog, Templates & Contributor Guidelines
-- **`ISSUES.md`**: Created a centralized backlog tracking 8 resolved issues and 8 open, prioritized feature issues (`#ISSUE-09` to `#ISSUE-16`) for future contributors (WebSocket voice streaming with Whisper/Piper, offline semantic vector embeddings, media controls, etc.).
-- **`CONTRIBUTING.md`**: Added a contributor guide covering architecture, setup, branch naming, conventional commits, security rules, and PR checklist.
-- **`.github/ISSUE_TEMPLATE/`**: Added structured YAML templates for bug reports (`bug_report.yml`) and feature requests (`feature_request.yml`).
-- **`.github/workflows/ci.yml`**: Added GitHub Actions workflow to run the 109 unit and desktop tests on Windows runners for every push and PR.
-
-### 8. 📝 Documentation & Config Hygiene (`README.md`, `.env.example`, `CLAUDE.md`)
-- Replaced hardcoded paths (`d:\sri\`) with relative and dynamic paths.
-- Documented cloud AI provider variables (`GROQ_API_KEY`, `GEMINI_API_KEY`, etc.) in `.env.example`.
-- Updated test documentation in `README.md` and `CLAUDE.md`.
+### 5. 🎨 Frontend HUD Display Selector & Normalized Click Dispatch (`frontend/`)
+- Added a Monitor selector dropdown (`#desktopMonitorSelect`) in the desktop viewer toolbar.
+- Populates connected monitors dynamically upon opening the screen viewer modal.
+- Clicking or tapping on the live screen feed computes normalized `x_ratio` and `y_ratio` and dispatches clicks to the active monitor.
 
 ---
 
 ## 🧪 Verification & Test Results
 
-All 109 automated tests pass with a 100% pass rate:
+Added 6 new unit tests to `tests/test_desktop_screen_suite.py` (`TestMultiMonitorControl`):
+- `test_20_monitor_enumeration`: Verifies enumeration of monitors with valid resolutions and attributes.
+- `test_21_virtual_screen_geometry`: Validates virtual multi-monitor bounding box calculations.
+- `test_22_active_monitor_selection`: Tests active monitor switching and invalid index handling.
+- `test_23_coordinate_normalization_ratios`: Validates ratio mapping (50%, 50% maps to monitor center).
+- `test_24_coordinate_normalization_clamping`: Validates edge clamping for out-of-bounds coordinates.
+- `test_25_multi_monitor_mouse_dispatch`: Validates click dispatching with ratio coordinates.
 
 ```bash
-# 1. Master Unit Test Suite (90 Tests)
+$ python tests/test_desktop_screen_suite.py
+.........................
+----------------------------------------------------------------------
+Ran 25 tests in 0.51s
+OK
+
 $ python tests/test_unit_suite.py
 ----------------------------------------------------------------------
-Ran 90 tests in 1.28s
+Ran 90 tests in 9.38s
 OK (STATUS: 100% PASS RATE)
-
-# 2. Desktop Automation Test Suite (19 Tests)
-$ python tests/test_desktop_screen_suite.py
-----------------------------------------------------------------------
-Ran 19 tests in 0.48s
-OK
 ```
+**Total: 115 passing automated tests.**
 
 ---
 
-## 📋 Pull Request Checklist
-- [x] Code adheres to repository style guides and architecture rules.
-- [x] All 109 unit and automation tests pass without errors.
-- [x] No sensitive keys, credentials, or personal files checked in.
-- [x] Safe fallbacks implemented for optional/OS-specific dependencies.
-- [x] Documentation and environment examples kept up to date.
+## 📋 Checklist
+- [x] Closes Issue #5.
+- [x] Adheres to project coding standards and architecture rules.
+- [x] Zero extra external dependencies added (uses standard `ctypes`).
+- [x] All 115 unit and automation tests passing (100% pass rate).
+- [x] Safe fallbacks implemented for non-Windows/headless environments.

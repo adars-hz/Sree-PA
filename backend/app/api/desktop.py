@@ -20,8 +20,15 @@ class MouseControlRequest(BaseModel):
     action: str = Field("click", description="'move', 'click', 'double_click', 'right_click', 'scroll', 'drag'")
     x: Optional[int] = None
     y: Optional[int] = None
+    x_ratio: Optional[float] = Field(None, ge=0.0, le=1.0, description="Normalized X coordinate ratio (0.0 to 1.0)")
+    y_ratio: Optional[float] = Field(None, ge=0.0, le=1.0, description="Normalized Y coordinate ratio (0.0 to 1.0)")
+    monitor_index: Optional[int] = Field(None, description="Target monitor index (defaults to active monitor)")
+    normalized: Optional[bool] = Field(False, description="Whether coordinates are normalized ratios")
     button: Optional[str] = "left"
     clicks: Optional[int] = 1
+
+class SelectMonitorRequest(BaseModel):
+    monitor_index: int = Field(..., ge=0, description="Index of the monitor to activate")
 
 class KeyboardControlRequest(BaseModel):
     action: str = Field("type", description="'type', 'press', 'hotkey'")
@@ -34,15 +41,36 @@ class SystemActionRequest(BaseModel):
 
 @router.get("/status")
 def get_desktop_status() -> Dict[str, Any]:
-    """Returns screen dimensions, cursor position, and screen share stream status."""
+    """Returns screen dimensions, cursor position, connected monitors, and stream status."""
     w, h = desktop_control.get_screen_dimensions()
     cx, cy = desktop_control.get_cursor_position()
     share_status = screen_share.get_status()
+    monitors = desktop_control.get_monitors()
+    active_mon = desktop_control.get_active_monitor()
+    virt = desktop_control.get_virtual_screen_geometry()
     return {
         "screen": {"width": w, "height": h},
         "cursor": {"x": cx, "y": cy},
-        "stream": share_status
+        "stream": share_status,
+        "monitors": monitors,
+        "active_monitor": active_mon,
+        "virtual_screen": virt
     }
+
+@router.get("/monitors")
+def get_monitors() -> Dict[str, Any]:
+    """Enumerates all connected display monitors and virtual screen geometry."""
+    return {
+        "monitors": desktop_control.get_monitors(),
+        "active_monitor": desktop_control.get_active_monitor(),
+        "active_monitor_index": desktop_control.active_monitor_index,
+        "virtual_screen": desktop_control.get_virtual_screen_geometry()
+    }
+
+@router.post("/monitors/select")
+def select_active_monitor(req: SelectMonitorRequest) -> Dict[str, Any]:
+    """Selects the target monitor for desktop automation and screen streaming."""
+    return desktop_control.set_active_monitor(req.monitor_index)
 
 @router.get("/stream")
 async def stream_desktop_screen():
@@ -74,20 +102,31 @@ def save_screenshot_file(filename: Optional[str] = None) -> Dict[str, Any]:
 
 @router.post("/mouse")
 def control_mouse(req: MouseControlRequest) -> Dict[str, Any]:
-    """Executes mouse move, click, or scroll command."""
+    """Executes mouse move, click, or scroll command across single or multi-monitor setups."""
     act = req.action.lower()
     if act == "move":
-        return desktop_control.move_mouse(req.x or 0, req.y or 0)
+        return desktop_control.move_mouse(
+            x=req.x, y=req.y, x_ratio=req.x_ratio, y_ratio=req.y_ratio, monitor_index=req.monitor_index
+        )
     elif act in ("click", "left_click"):
-        return desktop_control.click(req.x, req.y, button=req.button or "left", clicks=req.clicks or 1)
+        return desktop_control.click(
+            x=req.x, y=req.y, x_ratio=req.x_ratio, y_ratio=req.y_ratio, monitor_index=req.monitor_index,
+            button=req.button or "left", clicks=req.clicks or 1
+        )
     elif act == "double_click":
-        return desktop_control.double_click(req.x, req.y)
+        return desktop_control.double_click(
+            x=req.x, y=req.y, x_ratio=req.x_ratio, y_ratio=req.y_ratio, monitor_index=req.monitor_index
+        )
     elif act == "right_click":
-        return desktop_control.right_click(req.x, req.y)
+        return desktop_control.right_click(
+            x=req.x, y=req.y, x_ratio=req.x_ratio, y_ratio=req.y_ratio, monitor_index=req.monitor_index
+        )
     elif act == "scroll":
         return desktop_control.scroll(clicks=req.clicks or -3)
     elif act == "drag":
-        return desktop_control.drag_to(req.x or 0, req.y or 0)
+        return desktop_control.drag_to(
+            x=req.x, y=req.y, x_ratio=req.x_ratio, y_ratio=req.y_ratio, monitor_index=req.monitor_index
+        )
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported mouse action: {req.action}")
 

@@ -2139,7 +2139,28 @@ class SreeApp {
             });
         }
 
-        // 5. Interactive Mouse & Touch Control on Stream Image
+        // 5. Multi-Monitor & Interactive Mouse Control on Stream Image
+        const monitorSelect = document.getElementById('desktopMonitorSelect');
+        if (monitorSelect) {
+            monitorSelect.addEventListener('change', async () => {
+                const idx = parseInt(monitorSelect.value, 10);
+                try {
+                    const res = await fetch(`${this.apiBase}/api/desktop/monitors/select`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ monitor_index: idx })
+                    });
+                    const d = await res.json();
+                    if (d.success) {
+                        showFeedback(`Active display set to Monitor ${idx}`);
+                        if (d.monitor) {
+                            this.screenDimensions = { width: d.monitor.width, height: d.monitor.height };
+                        }
+                    }
+                } catch (e) {}
+            });
+        }
+
         if (feedImg) {
             const calculateCoords = (e) => {
                 const rect = feedImg.getBoundingClientRect();
@@ -2147,7 +2168,7 @@ class SreeApp {
                 const relY = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
                 const hostX = Math.round(relX * this.screenDimensions.width);
                 const hostY = Math.round(relY * this.screenDimensions.height);
-                return { hostX, hostY };
+                return { hostX, hostY, relX, relY };
             };
 
             feedImg.addEventListener('mousemove', (e) => {
@@ -2157,41 +2178,63 @@ class SreeApp {
 
             feedImg.addEventListener('click', async (e) => {
                 this.triggerHaptic([15]);
-                const { hostX, hostY } = calculateCoords(e);
+                const { hostX, hostY, relX, relY } = calculateCoords(e);
+                const monIdx = monitorSelect ? parseInt(monitorSelect.value, 10) : 0;
                 try {
                     await fetch(`${this.apiBase}/api/desktop/mouse`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: 'click', x: hostX, y: hostY, button: 'left' })
+                        body: JSON.stringify({
+                            action: 'click',
+                            x_ratio: relX,
+                            y_ratio: relY,
+                            monitor_index: monIdx,
+                            normalized: true,
+                            button: 'left'
+                        })
                     });
-                    showFeedback(`Clicked at (${hostX}, ${hostY})`);
+                    showFeedback(`Clicked Monitor ${monIdx} (${Math.round(relX * 100)}%, ${Math.round(relY * 100)}%)`);
                 } catch (e) {}
             });
 
             feedImg.addEventListener('contextmenu', async (e) => {
                 e.preventDefault();
                 this.triggerHaptic([20]);
-                const { hostX, hostY } = calculateCoords(e);
+                const { hostX, hostY, relX, relY } = calculateCoords(e);
+                const monIdx = monitorSelect ? parseInt(monitorSelect.value, 10) : 0;
                 try {
                     await fetch(`${this.apiBase}/api/desktop/mouse`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: 'right_click', x: hostX, y: hostY })
+                        body: JSON.stringify({
+                            action: 'right_click',
+                            x_ratio: relX,
+                            y_ratio: relY,
+                            monitor_index: monIdx,
+                            normalized: true
+                        })
                     });
-                    showFeedback(`Right-clicked at (${hostX}, ${hostY})`);
+                    showFeedback(`Right-clicked Monitor ${monIdx}`);
                 } catch (e) {}
             });
 
             feedImg.addEventListener('dblclick', async (e) => {
                 this.triggerHaptic([20]);
-                const { hostX, hostY } = calculateCoords(e);
+                const { hostX, hostY, relX, relY } = calculateCoords(e);
+                const monIdx = monitorSelect ? parseInt(monitorSelect.value, 10) : 0;
                 try {
                     await fetch(`${this.apiBase}/api/desktop/mouse`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: 'double_click', x: hostX, y: hostY })
+                        body: JSON.stringify({
+                            action: 'double_click',
+                            x_ratio: relX,
+                            y_ratio: relY,
+                            monitor_index: monIdx,
+                            normalized: true
+                        })
                     });
-                    showFeedback(`Double-clicked at (${hostX}, ${hostY})`);
+                    showFeedback(`Double-clicked Monitor ${monIdx}`);
                 } catch (e) {}
             });
         }
@@ -2297,6 +2340,21 @@ class SreeApp {
                 const cursorPos = document.getElementById('streamCursorPos');
                 if (cursorPos && data.cursor) {
                     cursorPos.textContent = `X: ${data.cursor.x}, Y: ${data.cursor.y}`;
+                }
+                if (data.monitors) {
+                    const sel = document.getElementById('desktopMonitorSelect');
+                    if (sel) {
+                        sel.innerHTML = '';
+                        data.monitors.forEach(m => {
+                            const opt = document.createElement('option');
+                            opt.value = m.index;
+                            opt.textContent = `${m.name} (${m.width}x${m.height})${m.is_primary ? ' [Primary]' : ''}`;
+                            if (m.index === data.active_monitor?.index || m.index === data.active_monitor_index) {
+                                opt.selected = true;
+                            }
+                            sel.appendChild(opt);
+                        });
+                    }
                 }
             }
         } catch (e) {}
