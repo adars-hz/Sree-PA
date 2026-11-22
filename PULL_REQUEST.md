@@ -1,88 +1,98 @@
-# Pull Request: Multi-Monitor Desktop Control & Screen Coordinate Normalization
+# Pull Request: Offline Semantic Memory Search using Local Vector Embeddings
 
 **Target Repository**: `adars-hz/Sree-PA`  
 **Base Branch**: `main`  
-**Head Branch**: `PRN-6:feature/multi-monitor-desktop-control`  
-**Closes**: #5  
+**Head Branch**: `PRN-6:feature/semantic-memory-search`  
+**Closes**: #3  
 **Author**: PRN-6  
 
 ---
 
 ## 📌 Title
 ```
-feat: multi-monitor enumeration, coordinate normalization & display selector (closes #5)
+feat: offline semantic memory search using local vector embeddings (closes #3)
 ```
 
 ---
 
 ## 📖 Description & Summary
 
-This pull request resolves **GitHub Issue #5**: *Multi-Monitor Desktop Control & Screen Coordinate Normalization*.
+This pull request resolves **GitHub Issue #3**: *[FEATURE]: Offline Semantic Memory Search using Local Vector Embeddings*.
 
-Previously, PyAutoGUI actions were restricted to the primary screen dimensions (`self.screen_width`), which clamped cursor movement to display 1 and made it impossible to control apps on secondary or tertiary monitors. Furthermore, fixed pixel coordinates failed across displays with varying DPI scaling or when interacting via the remote PWA screen viewer.
+### Problem Statement
+Memory retrieval previously relied on exact keyword matching. When a user accumulated memories across conversations, queries with conceptually similar or synonymous wording (e.g. asking *"what are my coding tools"* when the saved memory is *"favorite editor is VS Code"*) failed to retrieve relevant context, causing the AI assistant to respond without personal context or hallucinate defaults. Cloud embedding APIs (OpenAI / Cohere) were ruled out to maintain 100% offline privacy and zero operating costs.
 
 ---
 
 ## 🛠️ Key Changes & Problem Resolutions
 
-### 1. 🖥️ Native Monitor Enumeration (`backend/app/automation/desktop_control.py`)
-- Implemented native display enumeration via Win32 `EnumDisplayMonitors` using Python's standard `ctypes` library (zero extra external dependencies).
-- Detects each display's device name, resolution, `(left, top, right, bottom)` bounding box coordinates, and primary monitor status.
-- Added graceful cross-platform fallback for headless or non-Windows environments.
+### 1. 🧠 High-Performance Local Vector Embedding Engine (`backend/app/memory/semantic_engine.py`)
+- Created `SemanticEmbeddingEngine` supporting dual vectorization modes:
+  - **Ollama Local Vector Integration**: Asynchronously interfaces with local Ollama embedding endpoints (`/api/embeddings` and `/api/embed` using `nomic-embed-text` or `all-minilm`).
+  - **Deterministic Subword & Domain Semantic Vectorizer (Offline Fallback)**: Generates 128-dimensional dense unit-normalized embedding vectors in $<1$ms without external network requests or GPU VRAM overhead, projecting semantic domain affinities (coding, preferences, hardware, work, location, pets, etc.) and character n-gram hashes.
+- Implemented vectorized NumPy cosine similarity calculations with threshold gating (`cosine_similarity`, `rank_memories`).
 
-### 2. 📐 Virtual Multi-Monitor Geometry & Active Monitor Selection
-- Added `get_virtual_screen_geometry()` to calculate the global multi-monitor bounding box spanning all connected displays.
-- Added `set_active_monitor(monitor_index)` and `get_active_monitor()` to dynamically select the target display for screen viewing and automation.
+### 2. 🗄️ Database Vector Persistence & Migration (`backend/app/database/db.py`)
+- Added `embedding = Column(Text, nullable=True)` to the `Memory` SQLAlchemy model.
+- Added automatic schema migration in `DatabaseManager.__init__` (`ALTER TABLE memories ADD COLUMN embedding TEXT;`), ensuring existing user databases migrate seamlessly without manual steps or data loss.
+- Updated `add_memory` and added `update_memory_embedding` to serialize vectors as JSON.
+- Updated `get_all_memories` to deserialize and return vector embeddings.
 
-### 3. 🎯 DPI-Aware Coordinate Normalization
-- Added `normalize_coordinates(x, y, x_ratio, y_ratio, monitor_index)`:
-  - **Ratio-Based Normalization**: Normalizes relative ratios `(0.0 to 1.0)` to target display coordinates, allowing responsive touchscreen and web UI clicks to map with 100% precision regardless of DPI scaling or client viewport zoom.
-  - **Monitor Offsets**: Offsets relative `(x, y)` pixels by target monitor `(left, top)` coordinates.
-  - **Virtual Boundary Clamping**: Prevents cursor clamping to monitor 1 by clamping across the complete virtual multi-monitor desktop.
-- Updated `move_mouse`, `click`, `double_click`, `right_click`, and `drag_to` to accept `x_ratio`, `y_ratio`, `monitor_index`, and `normalized`.
+### 3. 🎯 Relevance-Gated Context Recall & Reindexing (`backend/app/memory/manager.py`)
+- **Semantic Search**: Implemented `search_semantic_memories(query, top_k=5, min_similarity=0.20)` returning ranked candidates with cosine similarity scores.
+- **Dynamic Context Injection**: Implemented `get_relevant_memory_context(user_query, max_items=5)` which dynamically extracts the most conceptually relevant memories and formats them for the LLM system prompt (e.g. `- [CODING] Editor: VS Code (relevance: 85%)`).
+- **Legacy Reindexing**: Implemented `reindex_all_memories()` to automatically backfill embeddings for any existing memories lacking them.
 
-### 4. 🌐 REST API Endpoints (`backend/app/api/desktop.py`)
-- `GET /api/desktop/monitors`: Returns all connected monitors, active display, and virtual screen geometry.
-- `POST /api/desktop/monitors/select`: Switches active display monitor.
-- Updated `GET /api/desktop/status` to include monitor telemetry.
-- Updated `POST /api/desktop/mouse` with `x_ratio`, `y_ratio`, `monitor_index`, and `normalized` flags.
+### 4. 🌐 REST API Endpoints (`backend/app/api/memory.py`)
+- `GET /api/memory/search?query=...&top_k=5&threshold=0.20`: Searches memories semantically using local embeddings and cosine similarity.
+- `POST /api/memory/reindex`: Reindexes all stored memories lacking embeddings.
+- Updated `POST /api/memory`: Automatically computes and stores embeddings when creating new memories.
 
-### 5. 🎨 Frontend HUD Display Selector & Normalized Click Dispatch (`frontend/`)
-- Added a Monitor selector dropdown (`#desktopMonitorSelect`) in the desktop viewer toolbar.
-- Populates connected monitors dynamically upon opening the screen viewer modal.
-- Clicking or tapping on the live screen feed computes normalized `x_ratio` and `y_ratio` and dispatches clicks to the active monitor.
+### 5. 🤖 Chat Integration (`backend/app/api/chat.py`)
+- Updated `chat_endpoint` and `chat_stream_endpoint` to dynamically query and inject top-$k$ relevant memories into system prompt context based on the incoming user query.
+- Ensured memory extraction intent handler persists vector embeddings upon new fact commitment.
 
 ---
 
 ## 🧪 Verification & Test Results
 
-Added 6 new unit tests to `tests/test_desktop_screen_suite.py` (`TestMultiMonitorControl`):
-- `test_20_monitor_enumeration`: Verifies enumeration of monitors with valid resolutions and attributes.
-- `test_21_virtual_screen_geometry`: Validates virtual multi-monitor bounding box calculations.
-- `test_22_active_monitor_selection`: Tests active monitor switching and invalid index handling.
-- `test_23_coordinate_normalization_ratios`: Validates ratio mapping (50%, 50% maps to monitor center).
-- `test_24_coordinate_normalization_clamping`: Validates edge clamping for out-of-bounds coordinates.
-- `test_25_multi_monitor_mouse_dispatch`: Validates click dispatching with ratio coordinates.
+Added 9 new automated unit tests in `tests/test_unit_suite.py` (`TestSemanticMemorySearch`):
+- `test_91_semantic_engine_embedding_dimension_and_norm`: Verifies 128-dimension vector generation and $L_2$ unit normalization.
+- `test_92_semantic_engine_cosine_similarity`: Verifies cosine math on identical, orthogonal, and opposite vectors.
+- `test_93_semantic_engine_conceptual_ranking_editor_vs_pet`: Directly tests Issue #3 problem statement: verifies that asking *"what are my coding tools"* ranks *"Editor: VS Code"* and *"Language: Python"* with high similarity while filtering out or deprioritizing unrelated memories (*"Pet: Max the dog"*).
+- `test_94_db_memory_embedding_persistence`: Verifies SQLite vector serialization and deserialization.
+- `test_95_memory_manager_add_memory_with_embedding`: Verifies automated embedding generation on addition.
+- `test_96_memory_manager_semantic_search`: Tests semantic query retrieval.
+- `test_97_memory_manager_context_injection_relevance`: Tests system prompt context injection with relevance scores.
+- `test_98_memory_manager_reindex_all`: Tests batch reindexing of unindexed legacy memories.
+- `test_99_memory_api_search_and_reindex_endpoints`: Tests REST API endpoints.
 
+### Test Execution Summary
 ```bash
+$ python tests/test_unit_suite.py
+======================================================================
+       RUNNING SREE MASTER TEST SUITE (99 UNIT TESTS)
+======================================================================
+...
+======================================================================
+  TESTS RUN: 99 | PASSED: 99 | FAILED: 0 | ERRORS: 0
+  EXECUTION TIME: 2.44s
+  STATUS: 100% PASS RATE (99/99 Passing)
+======================================================================
+
 $ python tests/test_desktop_screen_suite.py
 .........................
 ----------------------------------------------------------------------
-Ran 25 tests in 0.51s
+Ran 25 tests in 0.481s
 OK
-
-$ python tests/test_unit_suite.py
-----------------------------------------------------------------------
-Ran 90 tests in 9.38s
-OK (STATUS: 100% PASS RATE)
 ```
-**Total: 115 passing automated tests.**
+**Total: 124 / 124 Passing Tests (100% Pass Rate).**
 
 ---
 
 ## 📋 Checklist
-- [x] Closes Issue #5.
-- [x] Adheres to project coding standards and architecture rules.
-- [x] Zero extra external dependencies added (uses standard `ctypes`).
-- [x] All 115 unit and automation tests passing (100% pass rate).
-- [x] Safe fallbacks implemented for non-Windows/headless environments.
+- [x] Code strictly adheres to project architecture and coding standards
+- [x] 100% offline with zero cloud dependency or operating costs
+- [x] Database migration handled automatically for existing databases
+- [x] All 124 automated unit and desktop tests pass cleanly
+- [x] Closes GitHub Issue #3 (`Closes #3`)

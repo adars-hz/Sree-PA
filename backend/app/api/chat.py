@@ -83,7 +83,7 @@ async def handle_proactive_actions(user_message: str) -> Optional[str]:
     # 4. Memory Intent (e.g. "remember that I prefer dark theme")
     mem_intent = memory_manager.extract_memory_intent(user_message)
     if mem_intent:
-        db_manager.add_memory(key=mem_intent["key"], value=mem_intent["value"], category=mem_intent["category"])
+        memory_manager.add_memory(key=mem_intent["key"], value=mem_intent["value"], category=mem_intent["category"])
         return f"Got it! I've committed that to memory: {mem_intent['key']} is {mem_intent['value']}."
 
     # 5. Create Note Intent (e.g. "note down: meeting at 3pm", "create note ...")
@@ -114,7 +114,7 @@ async def chat_endpoint(request: ChatRequest):
         db_manager.save_message(session_id=request.session_id, role="assistant", content=action_reply, model="system")
         return ChatResponse(model="system-action", reply=action_reply, action_taken="local_command")
 
-    memory_context = memory_manager.get_memory_context_string()
+    memory_context = request.memory_context or memory_manager.get_relevant_memory_context(request.message, max_items=5)
     
     if not request.history:
         db_history = db_manager.get_conversation_history(session_id=request.session_id, limit=8)
@@ -177,7 +177,7 @@ async def chat_stream_endpoint(request: ChatRequest):
             
         return StreamingResponse(single_action_generator(), media_type="text/plain; charset=utf-8")
 
-    memory_context = memory_manager.get_memory_context_string()
+    memory_context = request.memory_context or memory_manager.get_relevant_memory_context(request.message, max_items=5)
 
     search_match = re.search(r"\b(?:search\s+(?:for|the\s+web\s+for)?|look\s+up|google)\s+(.+)", request.message, re.IGNORECASE)
     if search_match:

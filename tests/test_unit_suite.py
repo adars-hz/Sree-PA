@@ -524,19 +524,142 @@ class TestSecurityAllowlistAndTelemetry(unittest.TestCase):
 
 
 # =====================================================================
+# 7. Offline Semantic Memory Search & Local Vector Embeddings (Issue #3) (9 Tests)
+# =====================================================================
+class TestSemanticMemorySearch(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Insert test memories for semantic evaluation
+        cls.mem_ids = []
+        cls.mem_ids.append(db_manager.add_memory("Editor", "VS Code", category="coding"))
+        cls.mem_ids.append(db_manager.add_memory("Language", "Python", category="coding"))
+        cls.mem_ids.append(db_manager.add_memory("Pet", "Max the golden retriever", category="pets"))
+        cls.mem_ids.append(db_manager.add_memory("City", "San Francisco", category="location"))
+
+    @classmethod
+    def tearDownClass(cls):
+        for mid in cls.mem_ids:
+            db_manager.delete_memory(mid)
+
+    def test_91_semantic_engine_embedding_dimension_and_norm(self):
+        from backend.app.memory.semantic_engine import semantic_engine
+        vec = semantic_engine.embed_text_sync("favorite editor is VS Code")
+        self.assertIsInstance(vec, list)
+        self.assertEqual(len(vec), 128)
+        norm = sum(x ** 2 for x in vec) ** 0.5
+        self.assertAlmostEqual(norm, 1.0, places=3)
+
+    def test_92_semantic_engine_cosine_similarity(self):
+        from backend.app.memory.semantic_engine import semantic_engine
+        v1 = [1.0, 0.0, 0.0]
+        v2 = [1.0, 0.0, 0.0]
+        v3 = [0.0, 1.0, 0.0]
+        self.assertAlmostEqual(semantic_engine.cosine_similarity(v1, v2), 1.0, places=4)
+        self.assertAlmostEqual(semantic_engine.cosine_similarity(v1, v3), 0.0, places=4)
+
+    def test_93_semantic_engine_conceptual_ranking_editor_vs_pet(self):
+        """Resolves GitHub Issue #3: query 'what are my coding tools' ranks editor/python over pet."""
+        from backend.app.memory.semantic_engine import semantic_engine
+        query_vec = semantic_engine.embed_text_sync("what are my coding tools")
+        
+        candidates = [
+            {"id": 1, "key": "Editor", "value": "VS Code", "category": "coding"},
+            {"id": 2, "key": "Language", "value": "Python", "category": "coding"},
+            {"id": 3, "key": "Pet", "value": "Max the dog", "category": "pets"},
+        ]
+        
+        ranked = semantic_engine.rank_memories(query_vec, candidates, top_k=3, min_similarity=0.10)
+        self.assertGreaterEqual(len(ranked), 2)
+        # Top 2 ranked results must be coding-related, not the pet
+        top_keys = [r["key"] for r in ranked[:2]]
+        self.assertIn("Editor", top_keys)
+        self.assertIn("Language", top_keys)
+        # Similarity of Editor/Language should be higher than Pet
+        top_sim = ranked[0]["similarity"]
+        self.assertGreater(top_sim, 0.50)
+
+    def test_94_db_memory_embedding_persistence(self):
+        test_emb = [0.123] * 128
+        mid = db_manager.add_memory("Persistence_Test", "Test Value", category="test", embedding=test_emb)
+        self.TestSemanticMemorySearch_mid = mid
+        mems = db_manager.get_all_memories()
+        target = next((m for m in mems if m["id"] == mid), None)
+        self.assertIsNotNone(target)
+        self.assertIsNotNone(target.get("embedding"))
+        self.assertEqual(len(target["embedding"]), 128)
+        self.assertAlmostEqual(target["embedding"][0], 0.123, places=3)
+        db_manager.delete_memory(mid)
+
+    def test_95_memory_manager_add_memory_with_embedding(self):
+        mid = memory_manager.add_memory("Hardware_GPU", "RTX 4090", category="hardware")
+        mems = db_manager.get_all_memories()
+        target = next((m for m in mems if m["id"] == mid), None)
+        self.assertIsNotNone(target)
+        self.assertIsNotNone(target.get("embedding"))
+        self.assertEqual(len(target["embedding"]), 128)
+        db_manager.delete_memory(mid)
+
+    def test_96_memory_manager_semantic_search(self):
+        results = memory_manager.search_semantic_memories("what programming environment and editor do I use", top_k=2, min_similarity=0.20)
+        self.assertGreaterEqual(len(results), 1)
+        found_keys = [r["key"] for r in results]
+        self.assertTrue("Editor" in found_keys or "Language" in found_keys)
+        self.assertNotIn("City", found_keys)
+
+    def test_97_memory_manager_context_injection_relevance(self):
+        ctx = memory_manager.get_relevant_memory_context("coding language and editor", max_items=2)
+        self.assertIn("relevance:", ctx.lower())
+        self.assertTrue("editor" in ctx.lower() or "python" in ctx.lower())
+
+    def test_98_memory_manager_reindex_all(self):
+        # Insert a memory directly without embedding
+        mid = db_manager.add_memory("No_Emb_Key", "No Emb Val", category="work", embedding=None)
+        # Clear embedding in DB explicitly to simulate legacy record
+        with db_manager.get_session() as sess:
+            from backend.app.database.db import Memory
+            mem = sess.query(Memory).filter(Memory.id == mid).first()
+            if mem:
+                mem.embedding = None
+                sess.commit()
+
+        reindexed = memory_manager.reindex_all_memories()
+        self.assertGreaterEqual(reindexed, 1)
+
+        mems = db_manager.get_all_memories()
+        target = next((m for m in mems if m["id"] == mid), None)
+        self.assertIsNotNone(target)
+        self.assertIsNotNone(target.get("embedding"))
+        db_manager.delete_memory(mid)
+
+    def test_99_memory_api_search_and_reindex_endpoints(self):
+        from backend.app.api.memory import search_memories, reindex_memories
+        # Test semantic search endpoint function
+        search_res = asyncio.run(search_memories(query="coding tools", top_k=3, threshold=0.15))
+        self.assertEqual(search_res["query"], "coding tools")
+        self.assertIn("results", search_res)
+        self.assertIsInstance(search_res["results"], list)
+
+        # Test reindex endpoint function
+        reindex_res = asyncio.run(reindex_memories())
+        self.assertEqual(reindex_res["status"], "success")
+        self.assertIn("reindexed_count", reindex_res)
+
+
+# =====================================================================
 # Main Test Runner
 # =====================================================================
 if __name__ == "__main__":
     suite = unittest.TestSuite()
     loader = unittest.TestLoader()
     
-    # Load all 6 test classes in order
+    # Load all 7 test classes in order
     suite.addTests(loader.loadTestsFromTestCase(TestDynamicPathResolver))
     suite.addTests(loader.loadTestsFromTestCase(TestSecurityGuard))
     suite.addTests(loader.loadTestsFromTestCase(TestSkillCrystallizer))
     suite.addTests(loader.loadTestsFromTestCase(TestUniversalRouter))
     suite.addTests(loader.loadTestsFromTestCase(TestDatabaseAndMemory))
     suite.addTests(loader.loadTestsFromTestCase(TestSecurityAllowlistAndTelemetry))
+    suite.addTests(loader.loadTestsFromTestCase(TestSemanticMemorySearch))
 
     total = suite.countTestCases()
     print("=" * 70)
