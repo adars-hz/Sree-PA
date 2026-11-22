@@ -4,6 +4,7 @@ Transitioned from raw sqlite3 to SQLAlchemy for better maintainability and Alemb
 """
 
 import logging
+import json
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from pathlib import Path
@@ -33,6 +34,7 @@ class Memory(Base):
     category = Column(String, default='general')
     key = Column(String, nullable=False, unique=True)
     value = Column(Text, nullable=False)
+    embedding = Column(Text, nullable=True)  # JSON-serialized vector embedding
     approved = Column(Boolean, default=True)
     created_at = Column(DateTime, server_default=func.current_timestamp())
     updated_at = Column(DateTime, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
@@ -84,6 +86,17 @@ class DatabaseManager:
         # Auto-initialize database schema if tables do not exist
         Base.metadata.create_all(bind=self.engine)
 
+        # Migration check: Ensure embedding column exists in memories table
+        try:
+            with self.engine.connect() as conn:
+                res = conn.execute(text("PRAGMA table_info(memories);")).fetchall()
+                col_names = [r[1] for r in res]
+                if col_names and "embedding" not in col_names:
+                    conn.execute(text("ALTER TABLE memories ADD COLUMN embedding TEXT;"))
+                    conn.commit()
+        except Exception as e:
+            logger.warning(f"Error checking/migrating memories embedding column: {e}")
+
     def get_session(self) -> Session:
         return self.SessionLocal()
 
@@ -113,18 +126,30 @@ class DatabaseManager:
             session.commit()
 
     # --- Long-term Memory Operations ---
-    def add_memory(self, key: str, value: str, category: str = "general") -> int:
+    def add_memory(self, key: str, value: str, category: str = "general", embedding: Optional[List[float]] = None) -> int:
         with self.get_session() as session:
+            emb_str = json.dumps(embedding) if embedding is not None else None
             memory = session.query(Memory).filter(Memory.key == key).first()
             if memory:
                 memory.value = value
                 memory.category = category
+                if emb_str is not None:
+                    memory.embedding = emb_str
             else:
-                memory = Memory(key=key, value=value, category=category)
+                memory = Memory(key=key, value=value, category=category, embedding=emb_str)
                 session.add(memory)
             session.commit()
             session.refresh(memory)
             return memory.id
+
+    def update_memory_embedding(self, memory_id: int, embedding: List[float]) -> bool:
+        with self.get_session() as session:
+            memory = session.query(Memory).filter(Memory.id == memory_id).first()
+            if memory:
+                memory.embedding = json.dumps(embedding)
+                session.commit()
+                return True
+            return False
 
     def get_all_memories(self, approved_only: bool = True) -> List[Dict[str, Any]]:
         with self.get_session() as session:
@@ -132,11 +157,25 @@ class DatabaseManager:
             if approved_only:
                 query = query.filter(Memory.approved == True)
             memories = query.order_by(Memory.id.desc()).all()
-            return [
-                {"id": m.id, "category": m.category, "key": m.key, "value": m.value,
-                 "approved": m.approved, "created_at": m.created_at, "updated_at": m.updated_at}
-                for m in memories
-            ]
+            result = []
+            for m in memories:
+                emb_data = None
+                if m.embedding:
+                    try:
+                        emb_data = json.loads(m.embedding)
+                    except Exception:
+                        emb_data = None
+                result.append({
+                    "id": m.id,
+                    "category": m.category,
+                    "key": m.key,
+                    "value": m.value,
+                    "embedding": emb_data,
+                    "approved": m.approved,
+                    "created_at": m.created_at,
+                    "updated_at": m.updated_at
+                })
+            return result
 
     def delete_memory(self, memory_id: int) -> bool:
         with self.get_session() as session:

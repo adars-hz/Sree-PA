@@ -142,6 +142,32 @@ class OllamaClient:
                 except json.JSONDecodeError:
                     continue
 
+    async def get_embedding(self, prompt: str, model: Optional[str] = None) -> Optional[List[float]]:
+        """
+        Request vector embedding from Ollama (/api/embeddings or /api/embed).
+        Returns normalized float list or None if unavailable.
+        """
+        active_model = model or "nomic-embed-text"
+        try:
+            client = await self.get_client()
+            # Try /api/embeddings (standard endpoint)
+            resp = await client.post("/api/embeddings", json={"model": active_model, "prompt": prompt})
+            if resp.status_code == 200:
+                data = resp.json()
+                emb = data.get("embedding")
+                if emb and isinstance(emb, list):
+                    return emb
+            # Fallback to /api/embed (newer endpoint)
+            resp2 = await client.post("/api/embed", json={"model": active_model, "input": prompt})
+            if resp2.status_code == 200:
+                data2 = resp2.json()
+                embs = data2.get("embeddings", [])
+                if embs and isinstance(embs[0], list):
+                    return embs[0]
+        except Exception as e:
+            logger.debug(f"Ollama get_embedding failed: {e}")
+        return None
+
 # Global singleton
 ollama_client = OllamaClient()
 
